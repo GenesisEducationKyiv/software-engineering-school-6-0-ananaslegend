@@ -3,11 +3,15 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/mail"
 
+	"github.com/ananaslegend/reposeetory/internal/httpapi/pages"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/rs/zerolog"
 )
 
 type SubscriptionService interface {
@@ -19,16 +23,11 @@ type SubscriptionService interface {
 type Handler struct {
 	svc        SubscriptionService
 	writeError func(w http.ResponseWriter, r *http.Request, err error)
+	pages      pages.Renderer
 }
 
 func NewHandler(svc SubscriptionService, writeError func(w http.ResponseWriter, r *http.Request, err error)) *Handler {
 	return &Handler{svc: svc, writeError: writeError}
-}
-
-func (h *Handler) Register(r chi.Router) {
-	r.Post("/api/subscribe", h.Subscribe)
-	r.Get("/api/confirm/{token}", h.Confirm)
-	r.Get("/api/unsubscribe/{token}", h.Unsubscribe)
 }
 
 func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
@@ -57,19 +56,33 @@ func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	if err := h.svc.Confirm(r.Context(), token); err != nil {
-		h.writeError(w, r, err)
+		switch {
+		case errors.Is(err, domain.ErrTokenNotFound):
+			h.pages.Unavailable(w, http.StatusNotFound)
+		case errors.Is(err, domain.ErrTokenExpired):
+			h.pages.Unavailable(w, http.StatusGone)
+		default:
+			zerolog.Ctx(r.Context()).Error().Err(err).Msg("confirm subscription")
+			h.pages.Oops(w, middleware.GetReqID(r.Context()))
+		}
 		return
 	}
-	writeJSON(w, http.StatusOK, statusResponse{Status: "confirmed"})
+	h.pages.Confirmed(w)
 }
 
 func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	if err := h.svc.Unsubscribe(r.Context(), token); err != nil {
-		h.writeError(w, r, err)
+		switch {
+		case errors.Is(err, domain.ErrTokenNotFound):
+			h.pages.Unavailable(w, http.StatusNotFound)
+		default:
+			zerolog.Ctx(r.Context()).Error().Err(err).Msg("unsubscribe")
+			h.pages.Oops(w, middleware.GetReqID(r.Context()))
+		}
 		return
 	}
-	writeJSON(w, http.StatusOK, statusResponse{Status: "unsubscribed"})
+	h.pages.Unsubscribed(w)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
