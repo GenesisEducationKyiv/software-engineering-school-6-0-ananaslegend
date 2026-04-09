@@ -21,6 +21,13 @@ type Config struct {
 
 	LogLevel  string `envconfig:"LOG_LEVEL" default:"info"`
 	LogPretty bool   `envconfig:"LOG_PRETTY" default:"true"`
+
+	SMTPHost      string `envconfig:"SMTP_HOST"`
+	SMTPPort      int    `envconfig:"SMTP_PORT" default:"587"`
+	SMTPUser      string `envconfig:"SMTP_USER"`
+	SMTPPass      string `envconfig:"SMTP_PASS"`
+	SMTPFrom      string `envconfig:"SMTP_FROM"`
+	SMTPTLSPolicy string `envconfig:"SMTP_TLS_POLICY" default:"starttls"`
 }
 
 func Load() (Config, error) {

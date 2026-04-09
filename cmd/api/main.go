@@ -45,10 +45,28 @@ func main() {
 	}
 	defer pool.Close()
 
+	var mailSender service.MailSender
+	if cfg.SMTPHost != "" {
+		smtpMailer, err := mailer.NewSMTPMailer(mailer.SMTPMailerConfig{
+			Host:      cfg.SMTPHost,
+			Port:      cfg.SMTPPort,
+			User:      cfg.SMTPUser,
+			Password:  cfg.SMTPPass,
+			From:      cfg.SMTPFrom,
+			TLSPolicy: cfg.SMTPTLSPolicy,
+		})
+		if err != nil {
+			log.Fatal().Err(err).Msg("create smtp mailer")
+		}
+		mailSender = smtpMailer
+	} else {
+		mailSender = mailer.NewStubMailer()
+	}
+
 	svc := service.New(service.Config{
 		Repo:            repository.New(pool),
 		GitHub:          githubclient.NewStubClient(),
-		Mailer:          mailer.NewStubMailer(),
+		Mailer:          mailSender,
 		AppBaseURL:      cfg.AppBaseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
 	})

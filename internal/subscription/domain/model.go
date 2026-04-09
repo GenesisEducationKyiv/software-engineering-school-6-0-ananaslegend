@@ -55,8 +55,10 @@ type MarkConfirmedParams struct {
 }
 
 type SendConfirmationParams struct {
-	To         string
-	ConfirmURL string
+	To             string
+	ConfirmURL     string
+	RepoFullName   string
+	UnsubscribeURL string
 }
 
 type SendReleaseParams struct {

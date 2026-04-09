@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>New release: {{.RepoFullName}}</title>
+</head>
+<body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#222;">
+  <h2>New release for <strong>{{.RepoFullName}}</strong></h2>
+  <p>Version <strong>{{.ReleaseTag}}</strong> has just been published.</p>
+  <p style="margin:32px 0;">
+    <a href="{{.ReleaseURL}}"
+       style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">
+      View release
+    </a>
+  </p>
+  <p style="color:#888;font-size:13px;">
+    Or copy this link:<br>
+    <a href="{{.ReleaseURL}}" style="color:#2563eb;">{{.ReleaseURL}}</a>
+  </p>
+</body>
+</html>
