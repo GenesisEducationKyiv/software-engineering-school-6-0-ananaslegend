@@ -33,3 +33,12 @@ migrate-down:
 
 clean:
 	rm -rf bin/
+
+docker-up:
+	docker compose up --build
+
+docker-down:
+	docker compose down
+
+docker-clean:
+	docker compose down -v
