@@ -30,6 +30,12 @@ func NewHandler(svc SubscriptionService, writeError func(w http.ResponseWriter, 
 	return &Handler{svc: svc, writeError: writeError}
 }
 
+func (h *Handler) Register(r chi.Router) {
+	r.Post("/api/subscribe", h.Subscribe)
+	r.Get("/api/confirm/{token}", h.Confirm)
+	r.Get("/api/unsubscribe/{token}", h.Unsubscribe)
+}
+
 func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	var req subscribeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
