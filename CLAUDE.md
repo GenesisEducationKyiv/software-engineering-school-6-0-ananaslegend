@@ -12,6 +12,7 @@ GitHub Release Notification API. Користувачі підписуються
 | Logger | `rs/zerolog` |
 | Mocks | `go.uber.org/mock` + `mockgen` |
 | Migrations | `golang-migrate` CLI (окремо, не на старті бінарника) |
+| Email | `github.com/wneessen/go-mail` (multipart HTML+text, STARTTLS/SSL/none) |
 
 ## Архітектура папок
 
@@ -23,13 +24,21 @@ internal/
   httpapi/                               # cross-cutting HTTP: router, middlewares, error writer
   storage/postgres/pool.go               # NewPool() → *pgxpool.Pool
   github/stub.go                         # StubClient (реальний клієнт — майбутній таск)
-  mailer/stub.go                         # StubMailer (реальний SMTP — майбутній таск)
+  mailer/
+    stub.go                              # StubMailer (використовується якщо SMTP_HOST не задано)
+    smtp.go                              # SMTPMailer (go-mail; активується через SMTP_HOST env)
+    templates/
+      confirmation.html / .txt           # шаблони підтвердження підписки
+      release.html / .txt                # шаблони сповіщення про реліз
   subscription/                          # feature-модуль (vertical slice)
     domain/                              # моделі, помилки, токени — нуль залежностей від проекту
     http/                                # HTTP handlers (package http, аліас subhttp при імпорті)
+      pages/                             # HTML-сторінки для браузерних GET-ендпоінтів
     service/                             # бізнес-логіка; тут живуть інтерфейси Repository/MailSender/RemoteRepositoryProvider
     repository/                          # pgx-реалізація персистенсу
 migrations/
+Dockerfile                               # multi-stage: golang:1.26-alpine → alpine:3.21; -mod=vendor
+docker-compose.yml                       # postgres, mailpit, migrate, api
 ```
 
 **Правило:** кожна нова фіча — нова папка `internal/<feature>/` з тим самим шаблоном. `internal/httpapi/` залишається мінімальним (тільки cross-cutting HTTP).
@@ -80,6 +89,31 @@ go generate ./internal/subscription/service/...
 subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 ```
 
+### HTML-сторінки для браузерних ендпоінтів
+`GET /api/confirm/{token}` і `GET /api/unsubscribe/{token}` повертають HTML, не JSON.
+Рендерер — `internal/subscription/http/pages` (пакет `pages`), `Renderer{}` zero-value usable.
+Шаблони вбудовані через `//go:embed templates/*`, парсяться при ініціалізації пакету.
+
+| Метод | Тригер | HTTP статус |
+|---|---|---|
+| `Confirmed(w)` | успішний confirm | 200 |
+| `Unsubscribed(w)` | успішний unsubscribe | 200 |
+| `Unavailable(w, status)` | `ErrTokenNotFound` або `ErrTokenExpired` | 404 / 410 |
+| `Oops(w, requestID)` | будь-яка інша помилка | 500 |
+
+`Subscribe` (POST) залишається JSON — `writeError` / `WriteError` незмінні.
+
+### SMTP Mailer
+`internal/mailer/smtp.go` — `SMTPMailer`, використовує `github.com/wneessen/go-mail`.
+Надсилає multipart/alternative (HTML + plain-text) через `SetBodyHTMLTemplate` + `AddAlternativeTextTemplate`.
+TLS-політика конфігурується через `SMTP_TLS_POLICY`: `starttls` (default) → `TLSOpportunistic`, `ssl` → `TLSMandatory`, `none` → `NoTLS`.
+Якщо `SMTP_HOST` порожній — `main.go` використовує `StubMailer`.
+
+### Docker / локальне оточення
+`make docker-up` піднімає повний стек: postgres → migrate → api + mailpit (:8025).
+Залежності вендоруються (`go mod vendor`) і білд у Docker використовує `-mod=vendor` — обхід корпоративного SSL-проксі, який перехоплює TLS всередині контейнера.
+Не використовувати `apk add` у runtime-стейджі з тієї ж причини; CA-сертифікати копіюються з builder-стейджу.
+
 ## HTTP API
 
 | Метод | Шлях | Опис |
@@ -111,6 +145,12 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 | `CONFIRM_TOKEN_TTL` | `24h` | TTL підтверджувального токена |
 | `LOG_LEVEL` | `info` | trace/debug/info/warn/error |
 | `LOG_PRETTY` | `true` | true=console, false=JSON |
+| `SMTP_HOST` | `` | Якщо порожній — StubMailer; інакше — SMTPMailer |
+| `SMTP_PORT` | `587` | |
+| `SMTP_USER` | `` | |
+| `SMTP_PASS` | `` | |
+| `SMTP_FROM` | `` | From-адреса листа (обов'язковий якщо SMTP_HOST задано) |
+| `SMTP_TLS_POLICY` | `starttls` | `starttls` / `ssl` / `none` |
 
 Скопіювати `.env.example` → `.env` перед першим запуском.
 
@@ -127,6 +167,9 @@ make tidy          # go mod tidy
 make migrate-up    # apply all migrations
 make migrate-down  # rollback last migration
 make clean         # rm -rf bin/
+make docker-up     # docker compose up --build -d
+make docker-down   # docker compose down
+make docker-clean  # docker compose down -v (видаляє volumes)
 ```
 
 `DB_URL` в Makefile можна перевизначити: `make migrate-up DB_URL=postgres://...`
@@ -144,7 +187,7 @@ go test ./internal/subscription/service/...
 - `GET /api/subscriptions?email=` — список підписок
 - Scanner: перевіряє нові релізи на GitHub (real `github.Client`)
 - Notifier: розсилає email про нові релізи (real SMTP mailer)
-- docker-compose / Dockerfile / CI
+- CI (GitHub Actions)
 - Prometheus metrics
 - Rate limiting на `/subscribe`
 - API key auth
