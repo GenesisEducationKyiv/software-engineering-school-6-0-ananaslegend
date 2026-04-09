@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/mail"
 
-	"github.com/ananaslegend/reposeetory/internal/httpapi/pages"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/subscription/http/pages"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog"

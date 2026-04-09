@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ananaslegend/reposeetory/internal/httpapi/pages"
+	"github.com/ananaslegend/reposeetory/internal/subscription/http/pages"
 )
 
 func TestRenderer_Confirmed(t *testing.T) {
