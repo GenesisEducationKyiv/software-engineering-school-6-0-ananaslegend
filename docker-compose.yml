@@ -39,8 +39,9 @@ services:
       DATABASE_URL: postgres://postgres:pass@postgres:5432/postgres?sslmode=disable
       APP_BASE_URL: http://localhost:8080
       SMTP_HOST: mailpit
-      SMTP_PORT: "1025"
+      SMTP_PORT: 1025
       SMTP_TLS_POLICY: none
+      SMTP_FROM: noreply@reposeetory.local
       LOG_PRETTY: "true"
       LOG_LEVEL: info
     env_file:
