@@ -15,6 +15,18 @@ import (
 
 var repoNameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 
+// normalizeRepo extracts "owner/name" from a URL or a plain "owner/name" string.
+// Strips trailing ".git" and takes the last two slash-separated segments.
+func normalizeRepo(s string) string {
+	s = strings.TrimSuffix(s, ".git")
+	s = strings.Trim(s, "/")
+	parts := strings.Split(s, "/")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2] + "/" + parts[len(parts)-1]
+	}
+	return s
+}
+
 // Repository is the storage contract expected by this service.
 type Repository interface {
 	UpsertRepo(ctx context.Context, p domain.UpsertRepoParams) (int64, error)
@@ -63,6 +75,7 @@ func New(cfg Config) *Service {
 }
 
 func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error {
+	p.Repository = normalizeRepo(p.Repository)
 	if !repoNameRe.MatchString(p.Repository) {
 		return domain.ErrInvalidRepoFormat
 	}

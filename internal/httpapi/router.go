@@ -17,6 +17,8 @@ func NewRouter(log zerolog.Logger, subHandler *subhttp.Handler) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(RequestLogger(log))
 
+	r.Get("/", subHandler.Landing)
+	r.Get("/subscribed", subHandler.Subscribed)
 	r.Post("/api/subscribe", subHandler.Subscribe)
 	r.Get("/api/confirm/{token}", subHandler.Confirm)
 	r.Get("/api/unsubscribe/{token}", subHandler.Unsubscribe)

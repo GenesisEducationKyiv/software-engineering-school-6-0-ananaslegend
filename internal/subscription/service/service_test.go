@@ -56,6 +56,28 @@ func TestSubscribe_InvalidRepoFormat(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrInvalidRepoFormat)
 }
 
+func TestSubscribe_FullRepoURL(t *testing.T) {
+	urls := []string{
+		"https://github.com/golang/go",
+		"https://github.com/golang/go.git",
+		"http://github.com/golang/go",
+		"https://gitlab.com/golang/go",
+		"https://gitlab.com/golang/go.git",
+	}
+	for _, url := range urls {
+		t.Run(url, func(t *testing.T) {
+			svc, repo, gh, m := newSvc(t)
+			gh.EXPECT().RepoExists(gomock.Any(), domain.RepoExistsParams{Owner: "golang", Name: "go"}).Return(true, nil)
+			repo.EXPECT().UpsertRepo(gomock.Any(), domain.UpsertRepoParams{Owner: "golang", Name: "go"}).Return(int64(1), nil)
+			repo.EXPECT().CreateSubscription(gomock.Any(), gomock.Any()).Return(&domain.Subscription{ID: 1}, nil)
+			m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
+
+			err := svc.Subscribe(context.Background(), domain.SubscribeParams{Email: "vasya@example.com", Repository: url})
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestSubscribe_RepoNotFound(t *testing.T) {
 	svc, _, gh, _ := newSvc(t)
 

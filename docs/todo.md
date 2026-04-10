@@ -96,3 +96,7 @@ push і PR. Bonus: build Docker image.
 втратити всі pending-підтвердження. Повернутись до цієї оптимізації коли
 з'явиться Redis у стеку для кешу GitHub API — тоді intra-service reuse
 виправданий.
+
+## Асинхронна відправка email confirmation
+
+## Refactor code 
