@@ -31,6 +31,8 @@ func NewHandler(svc SubscriptionService, writeError func(w http.ResponseWriter, 
 }
 
 func (h *Handler) Register(r chi.Router) {
+	r.Get("/", h.Landing)
+	r.Get("/subscribed", h.Subscribed)
 	r.Post("/api/subscribe", h.Subscribe)
 	r.Get("/api/confirm/{token}", h.Confirm)
 	r.Get("/api/unsubscribe/{token}", h.Unsubscribe)
@@ -89,6 +91,14 @@ func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.pages.Unsubscribed(w)
+}
+
+func (h *Handler) Landing(w http.ResponseWriter, r *http.Request) {
+	h.pages.Landing(w)
+}
+
+func (h *Handler) Subscribed(w http.ResponseWriter, r *http.Request) {
+	h.pages.Subscribed(w)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
