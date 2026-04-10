@@ -12,6 +12,10 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/httpapi"
 	"github.com/ananaslegend/reposeetory/internal/logger"
 	"github.com/ananaslegend/reposeetory/internal/mailer"
+	"github.com/ananaslegend/reposeetory/internal/notifier"
+	notifierrepo "github.com/ananaslegend/reposeetory/internal/notifier/repository"
+	"github.com/ananaslegend/reposeetory/internal/scanner"
+	scannerrepo "github.com/ananaslegend/reposeetory/internal/scanner/repository"
 	"github.com/ananaslegend/reposeetory/internal/storage/postgres"
 	"github.com/ananaslegend/reposeetory/internal/subscription/repository"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service"
@@ -62,6 +66,23 @@ func main() {
 	} else {
 		mailSender = mailer.NewStubMailer()
 	}
+
+	githubClient := githubclient.NewClient(cfg.GitHubToken)
+
+	scan := scanner.New(scanner.Config{
+		Repo:     scannerrepo.New(pool),
+		GitHub:   githubClient,
+		Interval: cfg.ScannerInterval,
+	})
+
+	notify := notifier.New(notifier.Config{
+		Repo:     notifierrepo.New(pool),
+		Mailer:   mailSender,
+		Interval: cfg.NotifierInterval,
+	})
+
+	go scan.Run(ctx)
+	go notify.Run(ctx)
 
 	svc := service.New(service.Config{
 		Repo:            repository.New(pool),
