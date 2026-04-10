@@ -6,7 +6,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
 	"github.com/ananaslegend/reposeetory/internal/httpapi"
@@ -19,7 +25,7 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/storage/postgres"
 	"github.com/ananaslegend/reposeetory/internal/subscription/repository"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service"
-	"github.com/rs/zerolog"
+	dbmigrations "github.com/ananaslegend/reposeetory/migrations"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
@@ -41,6 +47,10 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if err := runMigrations(cfg.DatabaseURL, log); err != nil {
+		log.Fatal().Err(err).Msg("run migrations")
+	}
 
 	pool, err := postgres.NewPool(ctx, postgres.Config{
 		URL:      cfg.DatabaseURL,
@@ -120,4 +130,21 @@ func main() {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
 	log.Info().Msg("shutdown complete")
+}
+
+func runMigrations(databaseURL string, log zerolog.Logger) error {
+	src, err := iofs.New(dbmigrations.FS, ".")
+	if err != nil {
+		return err
+	}
+	pgx5URL := "pgx5://" + strings.TrimPrefix(strings.TrimPrefix(databaseURL, "postgres://"), "postgresql://")
+	m, err := migrate.NewWithSourceInstance("iofs", src, pgx5URL)
+	if err != nil {
+		return err
+	}
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return err
+	}
+	log.Info().Msg("migrations applied")
+	return nil
 }
