@@ -28,6 +28,11 @@ type Config struct {
 	SMTPPass      string `envconfig:"SMTP_PASS"`
 	SMTPFrom      string `envconfig:"SMTP_FROM"`
 	SMTPTLSPolicy string `envconfig:"SMTP_TLS_POLICY" default:"starttls"`
+
+	GitHubToken string `envconfig:"GITHUB_TOKEN"`
+
+	ScannerInterval  time.Duration `envconfig:"SCANNER_INTERVAL" default:"5m"`
+	NotifierInterval time.Duration `envconfig:"NOTIFIER_INTERVAL" default:"30s"`
 }
 
 func Load() (Config, error) {
