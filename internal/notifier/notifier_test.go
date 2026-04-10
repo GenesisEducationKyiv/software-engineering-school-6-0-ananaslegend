@@ -23,11 +23,12 @@ func newNotifier(t *testing.T) (*notifier.Notifier, *mocks.MockRepository, *mock
 }
 
 var testPending = notifier.PendingNotification{
-	ID:         42,
-	Email:      "user@example.com",
-	RepoOwner:  "golang",
-	RepoName:   "go",
-	ReleaseTag: "go1.22.0",
+	ID:               42,
+	Email:            "user@example.com",
+	RepoOwner:        "golang",
+	RepoName:         "go",
+	ReleaseTag:       "go1.22.0",
+	UnsubscribeToken: "tok-abc123",
 }
 
 // invokeProcessNext makes the mock call fn with the given notification.
@@ -56,10 +57,11 @@ func TestNotifier_FlushOneNotification_MailerCalled(t *testing.T) {
 		repo.EXPECT().ProcessNext(gomock.Any(), gomock.Any()).Return(false, nil),
 	)
 	m.EXPECT().SendRelease(gomock.Any(), domain.SendReleaseParams{
-		To:           "user@example.com",
-		RepoFullName: "golang/go",
-		ReleaseTag:   "go1.22.0",
-		ReleaseURL:   "https://github.com/golang/go/releases/tag/go1.22.0",
+		To:             "user@example.com",
+		RepoFullName:   "golang/go",
+		ReleaseTag:     "go1.22.0",
+		ReleaseURL:     "https://github.com/golang/go/releases/tag/go1.22.0",
+		UnsubscribeURL: "/api/unsubscribe/tok-abc123",
 	}).Return(nil)
 
 	n.Flush(context.Background())

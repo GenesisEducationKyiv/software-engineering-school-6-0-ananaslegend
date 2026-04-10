@@ -13,11 +13,12 @@ import (
 
 // PendingNotification is one outbox row joined with subscription + repository data.
 type PendingNotification struct {
-	ID         int64
-	Email      string
-	RepoOwner  string
-	RepoName   string
-	ReleaseTag string
+	ID               int64
+	Email            string
+	RepoOwner        string
+	RepoName         string
+	ReleaseTag       string
+	UnsubscribeToken string
 }
 
 // Repository is the storage contract for the notifier.
@@ -39,6 +40,7 @@ type Config struct {
 	Repo     Repository
 	Mailer   MailSender
 	Interval time.Duration
+	BaseURL  string
 }
 
 // Notifier periodically drains the release_notifications outbox by sending emails.
@@ -46,11 +48,12 @@ type Notifier struct {
 	repo     Repository
 	mailer   MailSender
 	interval time.Duration
+	baseURL  string
 }
 
 // New creates a Notifier from cfg.
 func New(cfg Config) *Notifier {
-	return &Notifier{repo: cfg.Repo, mailer: cfg.Mailer, interval: cfg.Interval}
+	return &Notifier{repo: cfg.Repo, mailer: cfg.Mailer, interval: cfg.Interval, baseURL: cfg.BaseURL}
 }
 
 // Run blocks until ctx is cancelled, flushing the outbox on each interval.
@@ -77,6 +80,7 @@ func (n *Notifier) Flush(ctx context.Context) {
 				ReleaseTag:   pending.ReleaseTag,
 				ReleaseURL: fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s",
 					pending.RepoOwner, pending.RepoName, pending.ReleaseTag),
+				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, pending.UnsubscribeToken),
 			})
 		})
 		if err != nil {

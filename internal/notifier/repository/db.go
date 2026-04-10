@@ -36,7 +36,7 @@ func (r *Repository) ProcessNext(ctx context.Context, fn func(context.Context, n
 
 	var n notifier.PendingNotification
 	err = tx.QueryRow(txCtx, `
-		SELECT rn.id, s.email, r.owner, r.name, rn.release_tag
+		SELECT rn.id, s.email, r.owner, r.name, rn.release_tag, s.unsubscribe_token
 		FROM release_notifications rn
 		JOIN subscriptions s ON rn.subscription_id = s.id
 		JOIN repositories  r ON rn.repository_id  = r.id
@@ -44,7 +44,7 @@ func (r *Repository) ProcessNext(ctx context.Context, fn func(context.Context, n
 		ORDER BY rn.created_at
 		LIMIT 1
 		FOR UPDATE OF rn SKIP LOCKED
-	`).Scan(&n.ID, &n.Email, &n.RepoOwner, &n.RepoName, &n.ReleaseTag)
+	`).Scan(&n.ID, &n.Email, &n.RepoOwner, &n.RepoName, &n.ReleaseTag, &n.UnsubscribeToken)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil

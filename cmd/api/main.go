@@ -97,6 +97,7 @@ func main() {
 		Repo:     notifierrepo.New(pool),
 		Mailer:   mailSender,
 		Interval: cfg.NotifierInterval,
+		BaseURL:  cfg.AppBaseURL,
 	})
 
 	go scan.Run(ctx)

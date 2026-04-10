@@ -62,8 +62,9 @@ type SendConfirmationParams struct {
 }
 
 type SendReleaseParams struct {
-	To           string
-	RepoFullName string
-	ReleaseTag   string
-	ReleaseURL   string
+	To             string
+	RepoFullName   string
+	ReleaseTag     string
+	ReleaseURL     string
+	UnsubscribeURL string
 }
