@@ -68,3 +68,39 @@ func TestRenderer_Oops(t *testing.T) {
 		t.Error("body: expected request ID in response")
 	}
 }
+
+func TestRenderer_Landing(t *testing.T) {
+	w := httptest.NewRecorder()
+	pages.Renderer{}.Landing(w)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status: want 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("content-type: want text/html, got %q", w.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(w.Body.String(), "reposeetory") {
+		t.Error("body: expected 'reposeetory'")
+	}
+	if !strings.Contains(w.Body.String(), "Watch repository") {
+		t.Error("body: expected 'Watch repository'")
+	}
+}
+
+func TestRenderer_Subscribed(t *testing.T) {
+	w := httptest.NewRecorder()
+	pages.Renderer{}.Subscribed(w)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status: want 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("content-type: want text/html, got %q", w.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(w.Body.String(), "Check your inbox") {
+		t.Error("body: expected 'Check your inbox'")
+	}
+	if !strings.Contains(w.Body.String(), "Subscribe more") {
+		t.Error("body: expected 'Subscribe more'")
+	}
+}
