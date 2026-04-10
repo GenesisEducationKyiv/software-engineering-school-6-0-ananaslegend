@@ -95,7 +95,7 @@ type Repository interface {
 }
 ```
 
-> **Примітка для імплементації:** оскільки транзакція має охоплювати і SELECT FOR UPDATE, і INSERT/UPDATE, методи `LockRepos`, `UpsertLastSeen`, `InsertNotifications` приймають `pgx.Tx` (або `context.Context` з tx через `pgxpool.BeginTx`). Scanner відповідає за `Begin`/`Commit`/`Rollback`, repository методи — тільки за SQL. Конкретний підхід (передача tx явно або через context) визначається при імплементації за наявним паттерном в `subscription/repository`.
+> **Транзакції через context:** Scanner починає транзакцію через `pool.BeginTx`, кладе `pgx.Tx` у context (helper `withTx(ctx, tx) context.Context`), і передає цей ctx у методи репозиторію. Repository дістає tx з context і виконує SQL на ньому. Scanner відповідає за `Commit`/`Rollback`. Notifier repository використовує той самий підхід.
 
 ```go
 
