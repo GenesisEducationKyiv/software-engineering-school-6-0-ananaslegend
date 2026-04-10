@@ -23,5 +23,10 @@ func New(cfg Config) zerolog.Logger {
 	if err != nil {
 		lvl = zerolog.InfoLevel
 	}
-	return l.Level(lvl)
+
+	leveledLogger := l.Level(lvl)
+
+	zerolog.DefaultContextLogger = &leveledLogger
+
+	return leveledLogger
 }

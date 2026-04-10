@@ -64,6 +64,7 @@ func (s *Scanner) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			zerolog.Ctx(ctx).Debug().Msg("scanner tick")
 			if err := s.Tick(ctx); err != nil {
 				zerolog.Ctx(ctx).Error().Err(err).Msg("scanner tick failed")
 			}

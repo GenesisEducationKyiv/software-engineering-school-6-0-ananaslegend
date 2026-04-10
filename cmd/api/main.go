@@ -11,8 +11,8 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/config"
 	"github.com/ananaslegend/reposeetory/internal/httpapi"
 	"github.com/ananaslegend/reposeetory/internal/logger"
-	"github.com/ananaslegend/reposeetory/internal/mailer"
 	"github.com/ananaslegend/reposeetory/internal/notifier"
+	"github.com/ananaslegend/reposeetory/internal/notifier/emailer"
 	notifierrepo "github.com/ananaslegend/reposeetory/internal/notifier/repository"
 	"github.com/ananaslegend/reposeetory/internal/scanner"
 	scannerrepo "github.com/ananaslegend/reposeetory/internal/scanner/repository"
@@ -37,6 +37,8 @@ func main() {
 		Pretty: cfg.LogPretty,
 	})
 
+	log.Info().Str("scanner_interval", cfg.ScannerInterval.String()).Str("notifier_interval", cfg.NotifierInterval.String()).Send()
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -51,7 +53,7 @@ func main() {
 
 	var mailSender service.MailSender
 	if cfg.SMTPHost != "" {
-		smtpMailer, err := mailer.NewSMTPMailer(mailer.SMTPMailerConfig{
+		smtpMailer, err := emailer.NewSMTPMailer(emailer.SMTPMailerConfig{
 			Host:      cfg.SMTPHost,
 			Port:      cfg.SMTPPort,
 			User:      cfg.SMTPUser,
@@ -64,7 +66,7 @@ func main() {
 		}
 		mailSender = smtpMailer
 	} else {
-		mailSender = mailer.NewStubMailer()
+		mailSender = emailer.NewStubMailer()
 	}
 
 	githubClient := githubclient.NewClient(cfg.GitHubToken)

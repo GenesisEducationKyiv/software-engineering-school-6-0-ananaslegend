@@ -1,4 +1,4 @@
-package mailer
+package emailer
 
 import (
 	"context"
@@ -42,12 +42,18 @@ func NewSMTPMailer(cfg SMTPMailerConfig) (*SMTPMailer, error) {
 		from = cfg.User
 	}
 
-	tlsPolicy := parseTLSPolicy(cfg.TLSPolicy)
-
 	opts := []mail.Option{
 		mail.WithPort(cfg.Port),
-		mail.WithTLSPolicy(tlsPolicy),
 	}
+	switch cfg.TLSPolicy {
+	case "ssl":
+		opts = append(opts, mail.WithSSL())
+	case "none":
+		opts = append(opts, mail.WithTLSPolicy(mail.NoTLS))
+	default: // "starttls"
+		opts = append(opts, mail.WithTLSPolicy(mail.TLSOpportunistic))
+	}
+
 	if cfg.User != "" {
 		opts = append(opts,
 			mail.WithSMTPAuth(mail.SMTPAuthPlain),
@@ -110,13 +116,3 @@ func (m *SMTPMailer) SendRelease(ctx context.Context, p domain.SendReleaseParams
 	return nil
 }
 
-func parseTLSPolicy(policy string) mail.TLSPolicy {
-	switch policy {
-	case "ssl":
-		return mail.TLSMandatory
-	case "none":
-		return mail.NoTLS
-	default: // "starttls"
-		return mail.TLSOpportunistic
-	}
-}

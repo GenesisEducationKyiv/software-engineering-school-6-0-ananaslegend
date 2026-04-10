@@ -23,7 +23,21 @@ internal/
   logger/logger.go                       # zerolog init
   httpapi/                               # cross-cutting HTTP: router, middlewares, error writer
   storage/postgres/pool.go               # NewPool() → *pgxpool.Pool
-  github/stub.go                         # StubClient (реальний клієнт — майбутній таск)
+  github/
+    client.go                            # реальний GitHub GraphQL клієнт (batch release fetching)
+    client_test.go                       # тести з httptest.Server
+    stub.go                              # StubClient (для subscription service)
+  scanner/                               # feature-модуль: перевірка нових релізів
+    scanner.go                           # Scanner.Run/Tick; інтерфейси Repository, ReleaseProvider
+    scanner_test.go
+    mocks/                               # mockgen
+    repository/db.go                     # pgx: RunInTx з SELECT FOR UPDATE SKIP LOCKED
+  notifier/                              # feature-модуль: розсилка email із outbox
+    notifier.go                          # Notifier.Run/Flush; інтерфейси Repository, MailSender
+    notifier_test.go
+    mocks/                               # mockgen
+    repository/db.go                     # pgx: ProcessNext (один запис за транзакцію)
+    emailer/                             # SMTPMailer + StubMailer (перенесено з mailer/)
   mailer/
     stub.go                              # StubMailer (використовується якщо SMTP_HOST не задано)
     smtp.go                              # SMTPMailer (go-mail; активується через SMTP_HOST env)
@@ -37,6 +51,8 @@ internal/
     service/                             # бізнес-логіка; тут живуть інтерфейси Repository/MailSender/RemoteRepositoryProvider
     repository/                          # pgx-реалізація персистенсу
 migrations/
+  000001_...                             # subscriptions, repositories
+  000002_release_notifications.up.sql   # outbox-таблиця release_notifications
 Dockerfile                               # multi-stage: golang:1.26-alpine → alpine:3.21; -mod=vendor
 docker-compose.yml                       # postgres, mailpit, migrate, api
 ```
@@ -103,6 +119,28 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 
 `Subscribe` (POST) залишається JSON — `writeError` / `WriteError` незмінні.
 
+### Scanner та Notifier
+
+**Scanner** (`internal/scanner/`) перевіряє нові релізи на GitHub батчем:
+- `Scanner.Tick(ctx)` → `Repository.RunInTx(ctx, limit=100, fn)` → SELECT 100 repo FOR UPDATE SKIP LOCKED
+- Всередині транзакції — один GraphQL запит на 100 репозиторіїв (aliased `r{id}: repository(...)`)
+- `ScanResult` може бути: `BumpOnly=true` (тег не змінився або релізів нема), `IsFirstScan=true` (перший раз бачимо тег — не нотифікувати), або `NewTag` зі `IsFirstScan=false` → вставляє рядки в `release_notifications`
+- Транзакція передається через context (`txKey{}` struct — приватний ключ контексту)
+- **Без `GITHUB_TOKEN` сканер не запускається** (GraphQL API повертає 403 без токена)
+
+**Notifier** (`internal/notifier/`) дренує outbox `release_notifications`:
+- `Notifier.Flush(ctx)` — цикл: `ProcessNext` → один pending запис FOR UPDATE SKIP LOCKED → надсилає email → `sent_at = NOW()` → commit
+- Один запис за транзакцію (без батч-обробки — trade-off не вартий)
+- На помилці mailer → rollback, логує, повертає (retry на наступному тіку)
+
+**Outbox таблиця** `release_notifications`:
+```sql
+id BIGSERIAL, subscription_id, repository_id, release_tag TEXT, created_at TIMESTAMPTZ, sent_at TIMESTAMPTZ
+-- partial index: WHERE sent_at IS NULL
+```
+
+**Транзакції через context:** `context.WithValue(ctx, txKey{}, tx)` — пакет репозиторію перевіряє контекст і використовує tx замість pool. `txKey{}` — приватний struct-тип, щоб уникнути конфліктів.
+
 ### SMTP Mailer
 `internal/mailer/smtp.go` — `SMTPMailer`, використовує `github.com/wneessen/go-mail`.
 Надсилає multipart/alternative (HTML + plain-text) через `SetBodyHTMLTemplate` + `AddAlternativeTextTemplate`.
@@ -151,6 +189,9 @@ TLS-політика конфігурується через `SMTP_TLS_POLICY`: 
 | `SMTP_PASS` | `` | |
 | `SMTP_FROM` | `` | From-адреса листа (обов'язковий якщо SMTP_HOST задано) |
 | `SMTP_TLS_POLICY` | `starttls` | `starttls` / `ssl` / `none` |
+| `GITHUB_TOKEN` | `` | **Обов'язковий для сканера** — GraphQL API повертає 403 без токена; якщо порожній — сканер не запускається (лог `WARN`) |
+| `SCANNER_INTERVAL` | `5m` | Інтервал між тіками сканера |
+| `NOTIFIER_INTERVAL` | `30s` | Інтервал між тіками нотифікатора |
 
 Скопіювати `.env.example` → `.env` перед першим запуском.
 
@@ -185,8 +226,6 @@ go test ./internal/subscription/service/...
 ## Поза обсягом (майбутні таски)
 
 - `GET /api/subscriptions?email=` — список підписок
-- Scanner: перевіряє нові релізи на GitHub (real `github.Client`)
-- Notifier: розсилає email про нові релізи (real SMTP mailer)
 - CI (GitHub Actions)
 - Prometheus metrics
 - Rate limiting на `/subscribe`
