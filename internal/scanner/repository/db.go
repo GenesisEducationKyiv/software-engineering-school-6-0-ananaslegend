@@ -45,6 +45,12 @@ func (r *Repository) RunInTx(ctx context.Context, limit int, fn func(context.Con
 
 	now := time.Now()
 	for _, res := range results {
+		if res.BumpOnly {
+			if err := bumpCheckedAt(txCtx, res.RepoID, now); err != nil {
+				return err
+			}
+			continue
+		}
 		if !res.IsFirstScan {
 			if err := insertNotifications(txCtx, res.RepoID, res.NewTag); err != nil {
 				return err
@@ -109,6 +115,17 @@ func upsertLastSeen(ctx context.Context, repoID int64, newTag string, now time.T
 	`, newTag, now, repoID)
 	if err != nil {
 		return fmt.Errorf("scanner: upsert last seen repo %d: %w", repoID, err)
+	}
+	return nil
+}
+
+func bumpCheckedAt(ctx context.Context, repoID int64, now time.Time) error {
+	tx := ctx.Value(txKey{}).(pgx.Tx)
+	_, err := tx.Exec(ctx, `
+		UPDATE repositories SET last_checked_at = $1 WHERE id = $2
+	`, now, repoID)
+	if err != nil {
+		return fmt.Errorf("scanner: bump last_checked_at repo %d: %w", repoID, err)
 	}
 	return nil
 }

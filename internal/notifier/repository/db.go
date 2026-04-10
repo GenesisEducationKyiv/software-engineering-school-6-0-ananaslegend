@@ -47,7 +47,6 @@ func (r *Repository) ProcessNext(ctx context.Context, fn func(context.Context, n
 	`).Scan(&n.ID, &n.Email, &n.RepoOwner, &n.RepoName, &n.ReleaseTag)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			_ = tx.Commit(ctx)
 			return false, nil
 		}
 		return false, fmt.Errorf("notifier: lock next pending: %w", err)

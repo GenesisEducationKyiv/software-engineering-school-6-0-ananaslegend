@@ -90,7 +90,7 @@ func TestScanner_NewRelease_IsFirstScanFalse(t *testing.T) {
 	assert.False(t, capturedResults[0].IsFirstScan)
 }
 
-func TestScanner_NoChange_EmptyResults(t *testing.T) {
+func TestScanner_NoChange_BumpsCheckedAt(t *testing.T) {
 	s, repo, gh := newScanner(t)
 
 	tag := "v1.0.0"
@@ -108,7 +108,9 @@ func TestScanner_NoChange_EmptyResults(t *testing.T) {
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)
-	assert.Empty(t, capturedResults)
+	require.Len(t, capturedResults, 1)
+	assert.Equal(t, int64(1), capturedResults[0].RepoID)
+	assert.True(t, capturedResults[0].BumpOnly)
 }
 
 func TestScanner_GitHubError_PropagatesError(t *testing.T) {
@@ -125,7 +127,7 @@ func TestScanner_GitHubError_PropagatesError(t *testing.T) {
 	assert.ErrorContains(t, err, "get latest releases")
 }
 
-func TestScanner_RepoWithNoRelease_Skipped(t *testing.T) {
+func TestScanner_NoRelease_BumpsCheckedAt(t *testing.T) {
 	s, repo, gh := newScanner(t)
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: nil}}
@@ -142,5 +144,7 @@ func TestScanner_RepoWithNoRelease_Skipped(t *testing.T) {
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)
-	assert.Empty(t, capturedResults)
+	require.Len(t, capturedResults, 1)
+	assert.Equal(t, int64(1), capturedResults[0].RepoID)
+	assert.True(t, capturedResults[0].BumpOnly)
 }

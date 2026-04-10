@@ -17,6 +17,7 @@ type ScanResult struct {
 	RepoID      int64
 	NewTag      string
 	IsFirstScan bool // if true: record tag but do NOT create notifications
+	BumpOnly    bool // if true: only bump last_checked_at, tag unchanged
 }
 
 // Repository is the storage contract for the scanner.
@@ -86,6 +87,8 @@ func (s *Scanner) Tick(ctx context.Context) error {
 		for _, repo := range repos {
 			latestTag, hasRelease := tags[repo.ID]
 			if !hasRelease {
+				// Repo has no releases yet — still bump last_checked_at.
+				results = append(results, ScanResult{RepoID: repo.ID, BumpOnly: true})
 				continue
 			}
 			if repo.LastSeenTag == nil {
@@ -95,7 +98,10 @@ func (s *Scanner) Tick(ctx context.Context) error {
 			}
 			if latestTag != *repo.LastSeenTag {
 				results = append(results, ScanResult{RepoID: repo.ID, NewTag: latestTag, IsFirstScan: false})
+				continue
 			}
+			// Tag unchanged — bump last_checked_at only.
+			results = append(results, ScanResult{RepoID: repo.ID, BumpOnly: true})
 		}
 		return results, nil
 	})
