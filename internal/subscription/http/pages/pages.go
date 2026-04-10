@@ -14,6 +14,8 @@ var (
 	unsubscribedTmpl = template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/unsubscribed.html"))
 	unavailableTmpl  = template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/unavailable.html"))
 	oopsTmpl         = template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/oops.html"))
+	landingTmpl      = template.Must(template.ParseFS(templateFS, "templates/landing.html"))
+	subscribedTmpl   = template.Must(template.ParseFS(templateFS, "templates/subscribed.html"))
 )
 
 // Renderer renders HTML response pages. Zero-value is ready to use.
@@ -47,4 +49,16 @@ func (r Renderer) Oops(w http.ResponseWriter, requestID string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
 	_ = oopsTmpl.ExecuteTemplate(w, "base", oopsData{RequestID: requestID})
+}
+
+func (r Renderer) Landing(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = landingTmpl.Execute(w, nil)
+}
+
+func (r Renderer) Subscribed(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = subscribedTmpl.Execute(w, nil)
 }
