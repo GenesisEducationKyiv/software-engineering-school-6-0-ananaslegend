@@ -58,6 +58,9 @@ github.com/mattn/go-isatty
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 github.com/pmezard/go-difflib/difflib
+# github.com/resend/resend-go/v2 v2.28.0
+## explicit; go 1.23
+github.com/resend/resend-go/v2
 # github.com/rogpeppe/go-internal v1.14.1
 ## explicit; go 1.23
 # github.com/rs/zerolog v1.35.0

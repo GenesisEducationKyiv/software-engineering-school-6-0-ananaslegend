@@ -29,6 +29,9 @@ type Config struct {
 	SMTPFrom      string `envconfig:"SMTP_FROM"`
 	SMTPTLSPolicy string `envconfig:"SMTP_TLS_POLICY" default:"starttls"`
 
+	ResendAPIKey string `envconfig:"RESEND_API_KEY"`
+	ResendFrom   string `envconfig:"RESEND_FROM"`
+
 	GitHubToken string `envconfig:"GITHUB_TOKEN"`
 
 	ScannerInterval  time.Duration `envconfig:"SCANNER_INTERVAL" default:"5m"`

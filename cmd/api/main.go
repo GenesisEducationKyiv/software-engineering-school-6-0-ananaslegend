@@ -62,7 +62,11 @@ func main() {
 	defer pool.Close()
 
 	var mailSender service.MailSender
-	if cfg.SMTPHost != "" {
+	switch {
+	case cfg.ResendAPIKey != "":
+		mailSender = emailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFrom)
+		log.Info().Msg("mailer: resend")
+	case cfg.SMTPHost != "":
 		smtpMailer, err := emailer.NewSMTPMailer(emailer.SMTPMailerConfig{
 			Host:      cfg.SMTPHost,
 			Port:      cfg.SMTPPort,
@@ -75,8 +79,10 @@ func main() {
 			log.Fatal().Err(err).Msg("create smtp mailer")
 		}
 		mailSender = smtpMailer
-	} else {
+		log.Info().Msg("mailer: smtp")
+	default:
 		mailSender = emailer.NewStubMailer()
+		log.Info().Msg("mailer: stub")
 	}
 
 	githubClient := githubclient.NewClient(cfg.GitHubToken)
