@@ -16,6 +16,8 @@ type Config struct {
 	DatabaseURL string `envconfig:"DATABASE_URL" required:"true"`
 	DBMaxConns  int32  `envconfig:"DB_MAX_CONNS" default:"10"`
 
+	RedisURL string `envconfig:"REDIS_URL"`
+
 	AppBaseURL      string        `envconfig:"APP_BASE_URL" default:"http://localhost:8080"`
 	ConfirmTokenTTL time.Duration `envconfig:"CONFIRM_TOKEN_TTL" default:"24h"`
 

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
@@ -25,6 +26,7 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/scanner"
 	scannerrepo "github.com/ananaslegend/reposeetory/internal/scanner/repository"
 	"github.com/ananaslegend/reposeetory/internal/storage/postgres"
+	redisstorage "github.com/ananaslegend/reposeetory/internal/storage/redis"
 	"github.com/ananaslegend/reposeetory/internal/subscription/repository"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service"
 	dbmigrations "github.com/ananaslegend/reposeetory/migrations"
@@ -94,9 +96,20 @@ func main() {
 
 	githubClient := githubclient.NewClient(cfg.GitHubToken)
 
+	var releaseProvider scanner.ReleaseProvider = githubClient
+	if cfg.RedisURL != "" {
+		rdb, err := redisstorage.NewClient(redisstorage.Config{URL: cfg.RedisURL})
+		if err != nil {
+			log.Warn().Err(err).Msg("redis unavailable, github caching disabled")
+		} else {
+			releaseProvider = githubclient.NewCachingClient(githubClient, rdb, 10*time.Minute)
+			log.Info().Msg("github release cache: redis")
+		}
+	}
+
 	scan := scanner.New(scanner.Config{
 		Repo:     scannerrepo.New(pool),
-		GitHub:   githubClient,
+		GitHub:   releaseProvider,
 		Interval: cfg.ScannerInterval,
 	})
 

@@ -15,6 +15,16 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   mailpit:
     image: axllent/mailpit:latest
     ports:
@@ -44,6 +54,7 @@ services:
       SMTP_PORT: 1025
       SMTP_TLS_POLICY: none
       SMTP_FROM: noreply@reposeetory.local
+      REDIS_URL: redis://redis:6379
       LOG_PRETTY: "true"
       LOG_LEVEL: info
     env_file:
@@ -54,6 +65,8 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+      redis:
+        condition: service_healthy
 
 volumes:
   pgdata:
