@@ -44,8 +44,8 @@ Constructor: `NewCachingClient(wrapped releaseProvider, rdb *redis.Client, ttl t
 4. Split repos into **hits** (key present in Redis) and **misses** (key absent)
 5. If no misses → return cached result
 6. Call `wrapped.GetLatestReleases` for misses only
-7. For each miss: if tag found in GitHub response → `SET github:release:{id} {tag} EX 600`; if no release → skip (do not cache)
-8. SET error → `log.Warn`, continue
+7. For repos with a tag in GitHub response → batch-write via **pipeline** (`SET github:release:{id} {tag} EX 600` for each); repos with no release → skip (do not cache)
+8. Pipeline error → `log.Warn`, continue
 9. Merge cached hits + fresh results, return
 
 **Cache key:** `github:release:{repoID}`  
@@ -111,7 +111,7 @@ scan := scanner.New(scanner.Config{
 | `REDIS_URL` not set | No Redis client created; scanner uses `*Client` directly |
 | Redis unreachable at startup | `log.Warn`, caching disabled, app starts normally |
 | `MGET` error at runtime | `log.Warn`, full fallback to `wrapped`, no error returned |
-| `SET` error at runtime | `log.Warn`, cached data already used, continue |
+| Pipeline `SET` error at runtime | `log.Warn`, results already returned correctly |
 | GitHub error | Propagated normally (Redis not involved) |
 
 ## Testing

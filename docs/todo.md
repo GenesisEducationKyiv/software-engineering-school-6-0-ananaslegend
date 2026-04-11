@@ -104,3 +104,5 @@ push і PR. Bonus: build Docker image.
 ## Баг коли в назві репозиторію є крапка, наприклад `some.owner/repo.name` — GitHub API повертає 404. Потрібно URL-енкодити `{owner}` і `{repo}` у запитах до GitHub API.
 
 ## Обробка HTTP помилок у відповіді
+
+## Перевірити gracuful shutdown для всіх воркерів (Scanner, Notifier, Confirmer) 
