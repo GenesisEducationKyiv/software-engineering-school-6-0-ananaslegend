@@ -53,8 +53,10 @@ func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLat
 	for i, repo := range p.Repos {
 		if vals[i] == nil {
 			misses = append(misses, repo)
+		} else if s, ok := vals[i].(string); ok {
+			result[repo.ID] = s
 		} else {
-			result[repo.ID] = vals[i].(string)
+			misses = append(misses, repo)
 		}
 	}
 
@@ -67,16 +69,22 @@ func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLat
 		return nil, err
 	}
 
-	pipe := c.rdb.Pipeline()
+	var toCache []domain.GitHubRepo
 	for _, repo := range misses {
 		if tag, ok := fresh[repo.ID]; ok {
-			pipe.Set(ctx, cacheKey(repo.ID), tag, c.ttl)
 			result[repo.ID] = tag
+			toCache = append(toCache, repo)
 		}
 		// no release → not cached, will be queried on next tick
 	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		log.Warn().Err(err).Msg("redis pipeline exec failed")
+	if len(toCache) > 0 {
+		pipe := c.rdb.Pipeline()
+		for _, repo := range toCache {
+			pipe.Set(ctx, cacheKey(repo.ID), fresh[repo.ID], c.ttl)
+		}
+		if _, err := pipe.Exec(ctx); err != nil {
+			log.Warn().Err(err).Int("count", len(toCache)).Msg("redis pipeline exec failed")
+		}
 	}
 
 	return result, nil
