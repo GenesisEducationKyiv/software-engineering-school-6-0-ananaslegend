@@ -23,6 +23,7 @@ func NewRouter(log zerolog.Logger, subHandler *subhttp.Handler) http.Handler {
 	r.Get("/subscribed", subHandler.Subscribed)
 
 	r.Post("/api/subscribe", subHandler.Subscribe)
+	r.Get("/api/subscriptions", subHandler.ListByEmail)
 	r.Get("/api/confirm/{token}", subHandler.Confirm)
 	r.Get("/api/unsubscribe/{token}", subHandler.Unsubscribe)
 

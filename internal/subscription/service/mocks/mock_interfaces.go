@@ -86,6 +86,21 @@ func (mr *MockRepositoryMockRecorder) GetByConfirmToken(ctx, token any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByConfirmToken", reflect.TypeOf((*MockRepository)(nil).GetByConfirmToken), ctx, token)
 }
 
+// ListByEmail mocks base method.
+func (m *MockRepository) ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListByEmail", ctx, email)
+	ret0, _ := ret[0].([]domain.SubscriptionView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListByEmail indicates an expected call of ListByEmail.
+func (mr *MockRepositoryMockRecorder) ListByEmail(ctx, email any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByEmail", reflect.TypeOf((*MockRepository)(nil).ListByEmail), ctx, email)
+}
+
 // MarkConfirmed mocks base method.
 func (m *MockRepository) MarkConfirmed(ctx context.Context, p domain.MarkConfirmedParams) error {
 	m.ctrl.T.Helper()

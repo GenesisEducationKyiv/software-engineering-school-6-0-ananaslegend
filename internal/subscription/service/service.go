@@ -34,6 +34,7 @@ type Repository interface {
 	GetByConfirmToken(ctx context.Context, token string) (*domain.Subscription, error)
 	MarkConfirmed(ctx context.Context, p domain.MarkConfirmedParams) error
 	DeleteByUnsubscribeToken(ctx context.Context, token string) (bool, error)
+	ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error)
 }
 
 // RemoteRepositoryProvider checks whether a GitHub repository exists.
@@ -144,4 +145,12 @@ func (s *Service) Unsubscribe(ctx context.Context, token string) error {
 
 	zerolog.Ctx(ctx).Info().Msg("unsubscribed")
 	return nil
+}
+
+func (s *Service) ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error) {
+	subs, err := s.repo.ListByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("list by email: %w", err)
+	}
+	return subs, nil
 }

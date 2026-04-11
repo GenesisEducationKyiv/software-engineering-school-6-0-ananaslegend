@@ -122,6 +122,47 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/subscriptions": {
+            "get": {
+                "description": "Returns all confirmed subscriptions for a given email address.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "List active subscriptions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Email address",
+                        "name": "email",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_subscription_http.SubscriptionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_subscription_http.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_subscription_http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/unsubscribe/{token}": {
             "get": {
                 "description": "Unsubscribes and permanently removes all subscription data (GDPR hard delete).",
@@ -198,6 +239,34 @@ const docTemplate = `{
                 "repository": {
                     "type": "string",
                     "example": "ananaslegend/reposeetory"
+                }
+            }
+        },
+        "internal_subscription_http.SubscriptionItem": {
+            "type": "object",
+            "properties": {
+                "confirmed_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "repository": {
+                    "type": "string",
+                    "example": "ananaslegend/reposeetory"
+                }
+            }
+        },
+        "internal_subscription_http.SubscriptionsResponse": {
+            "type": "object",
+            "properties": {
+                "subscriptions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_subscription_http.SubscriptionItem"
+                    }
                 }
             }
         }

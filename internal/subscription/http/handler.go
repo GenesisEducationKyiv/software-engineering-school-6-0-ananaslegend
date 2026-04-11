@@ -18,6 +18,7 @@ type SubscriptionService interface {
 	Subscribe(ctx context.Context, p domain.SubscribeParams) error
 	Confirm(ctx context.Context, token string) error
 	Unsubscribe(ctx context.Context, token string) error
+	ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error)
 }
 
 type Handler struct {
@@ -141,6 +142,42 @@ func (h *Handler) Landing(w http.ResponseWriter, r *http.Request) {
 //	@Router			/subscribed [get]
 func (h *Handler) Subscribed(w http.ResponseWriter, r *http.Request) {
 	h.pages.Subscribed(w)
+}
+
+// ListByEmail godoc
+//
+//	@Summary		List active subscriptions
+//	@Description	Returns all confirmed subscriptions for a given email address.
+//	@Tags			subscriptions
+//	@Produce		json
+//	@Param			email	query		string				true	"Email address"	example:"user@example.com"
+//	@Success		200		{object}	SubscriptionsResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/api/subscriptions [get]
+func (h *Handler) ListByEmail(w http.ResponseWriter, r *http.Request) {
+	email := r.URL.Query().Get("email")
+	if _, err := mail.ParseAddress(email); err != nil || email == "" {
+		h.writeError(w, r, errBadRequest("invalid email"))
+		return
+	}
+
+	subs, err := h.svc.ListByEmail(r.Context(), email)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg("list subscriptions")
+		h.writeError(w, r, err)
+		return
+	}
+
+	items := make([]SubscriptionItem, len(subs))
+	for i, s := range subs {
+		items[i] = SubscriptionItem{
+			Repository:  s.RepoOwner + "/" + s.RepoName,
+			ConfirmedAt: s.ConfirmedAt,
+			CreatedAt:   s.CreatedAt,
+		}
+	}
+	writeJSON(w, http.StatusOK, SubscriptionsResponse{Subscriptions: items})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

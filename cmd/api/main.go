@@ -6,7 +6,7 @@
 // @contact.name	ananaslegend
 // @contact.url		https://github.com/ananaslegend/reposeetory
 // @license.name	MIT
-// @host			reposeetory.com
+// @host			localhost:8080
 // @BasePath		/
 package main
 

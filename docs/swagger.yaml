@@ -21,6 +21,25 @@ definitions:
         example: ananaslegend/reposeetory
         type: string
     type: object
+  internal_subscription_http.SubscriptionItem:
+    properties:
+      confirmed_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      repository:
+        example: ananaslegend/reposeetory
+        type: string
+    type: object
+  internal_subscription_http.SubscriptionsResponse:
+    properties:
+      subscriptions:
+        items:
+          $ref: '#/definitions/internal_subscription_http.SubscriptionItem'
+        type: array
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -99,6 +118,33 @@ paths:
           schema:
             $ref: '#/definitions/internal_subscription_http.ErrorResponse'
       summary: Subscribe to a repository
+      tags:
+      - subscriptions
+  /api/subscriptions:
+    get:
+      description: Returns all confirmed subscriptions for a given email address.
+      parameters:
+      - description: Email address
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_subscription_http.SubscriptionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+      summary: List active subscriptions
       tags:
       - subscriptions
   /api/unsubscribe/{token}:
