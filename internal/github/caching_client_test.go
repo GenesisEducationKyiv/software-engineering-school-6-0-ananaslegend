@@ -49,3 +49,42 @@ func TestCachingReleaseProvider_CacheMiss(t *testing.T) {
 	assert.Equal(t, "v1.0.0", tags[1])
 	assert.Equal(t, 1, stub.calls)
 }
+
+func TestCachingReleaseProvider_CacheHit(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
+	c := NewCachingClient(stub, rdb, time.Minute)
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "golang", Name: "go"}}
+
+	// First call — populates cache
+	_, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+
+	// Second call — must hit cache, not call wrapped again
+	tags, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+	assert.Equal(t, "v1.0.0", tags[1])
+	assert.Equal(t, 1, stub.calls)
+}
+
+func TestCachingReleaseProvider_PartialHitMiss(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	stub := &stubProvider{result: map[int64]string{1: "v1.0.0", 2: "v2.0.0"}}
+	c := NewCachingClient(stub, rdb, time.Minute)
+
+	repo1 := domain.GitHubRepo{ID: 1, Owner: "golang", Name: "go"}
+	repo2 := domain.GitHubRepo{ID: 2, Owner: "torvalds", Name: "linux"}
+
+	// Populate cache for repo1 only
+	_, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: []domain.GitHubRepo{repo1}})
+	require.NoError(t, err)
+	assert.Equal(t, 1, stub.calls)
+
+	// repo1 from cache, repo2 from GitHub — wrapped called once more (for repo2 only)
+	tags, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: []domain.GitHubRepo{repo1, repo2}})
+	require.NoError(t, err)
+	assert.Equal(t, "v1.0.0", tags[1])
+	assert.Equal(t, "v2.0.0", tags[2])
+	assert.Equal(t, 2, stub.calls)
+}
