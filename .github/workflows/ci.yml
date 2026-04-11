@@ -26,8 +26,8 @@ jobs:
 
       - name: Lint
         uses: golangci/golangci-lint-action@v6
-        with:
-          args: --mod=vendor
+        env:
+          GOFLAGS: -mod=vendor
 
       - name: Test
         run: go test -mod=vendor ./...
