@@ -121,7 +121,7 @@ func main() {
 		if err != nil {
 			log.Warn().Err(err).Msg("redis unavailable, github caching disabled")
 		} else {
-			defer rdb.Close()
+			defer func() { _ = rdb.Close() }()
 			releaseProvider = githubclient.NewCachingClient(githubclient.CachingConfig{
 				Provider: githubClient,
 				RDB:      rdb,
