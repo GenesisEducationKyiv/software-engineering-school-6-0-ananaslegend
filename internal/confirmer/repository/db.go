@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type txKey struct{}
+
 // Repository implements confirmer.Repository using pgx.
 type Repository struct {
 	pool *pgxpool.Pool
@@ -30,13 +32,16 @@ func (r *Repository) ProcessNext(ctx context.Context, fn func(context.Context, c
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	txCtx := context.WithValue(ctx, txKey{}, tx)
+
 	var c confirmer.PendingConfirmation
-	err = tx.QueryRow(ctx, `
+	err = tx.QueryRow(txCtx, `
 		SELECT cn.id, s.email, s.confirm_token, r.owner, r.name
 		FROM confirmation_notifications cn
 		JOIN subscriptions  s ON cn.subscription_id = s.id
 		JOIN repositories   r ON s.repository_id   = r.id
 		WHERE cn.sent_at IS NULL
+		  AND s.confirm_token IS NOT NULL
 		ORDER BY cn.created_at
 		LIMIT 1
 		FOR UPDATE OF cn SKIP LOCKED
@@ -48,11 +53,11 @@ func (r *Repository) ProcessNext(ctx context.Context, fn func(context.Context, c
 		return false, fmt.Errorf("confirmer: lock next pending: %w", err)
 	}
 
-	if err := fn(ctx, c); err != nil {
+	if err := fn(txCtx, c); err != nil {
 		return false, fmt.Errorf("confirmer: process confirmation %d: %w", c.ID, err)
 	}
 
-	if _, err := tx.Exec(ctx, `
+	if _, err := tx.Exec(txCtx, `
 		UPDATE confirmation_notifications SET sent_at = $1 WHERE id = $2
 	`, time.Now(), c.ID); err != nil {
 		return false, fmt.Errorf("confirmer: mark sent %d: %w", c.ID, err)
