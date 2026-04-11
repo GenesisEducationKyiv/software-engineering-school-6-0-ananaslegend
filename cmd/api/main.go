@@ -15,6 +15,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
+	"github.com/ananaslegend/reposeetory/internal/confirmer"
+	confirmerrepo "github.com/ananaslegend/reposeetory/internal/confirmer/repository"
 	"github.com/ananaslegend/reposeetory/internal/httpapi"
 	"github.com/ananaslegend/reposeetory/internal/logger"
 	"github.com/ananaslegend/reposeetory/internal/notifier"
@@ -30,6 +32,11 @@ import (
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 )
+
+type fullMailer interface {
+	notifier.MailSender
+	confirmer.MailSender
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -61,7 +68,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	var mailSender service.MailSender
+	var mailSender fullMailer
 	switch {
 	case cfg.ResendAPIKey != "":
 		mailSender = emailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFrom)
@@ -103,10 +110,17 @@ func main() {
 	go scan.Run(ctx)
 	go notify.Run(ctx)
 
+	confirm := confirmer.New(confirmer.Config{
+		Repo:     confirmerrepo.New(pool),
+		Mailer:   mailSender,
+		Interval: cfg.ConfirmerInterval,
+		BaseURL:  cfg.AppBaseURL,
+	})
+	go confirm.Run(ctx)
+
 	svc := service.New(service.Config{
 		Repo:            repository.New(pool),
 		GitHub:          githubclient.NewStubClient(),
-		Mailer:          mailSender,
 		AppBaseURL:      cfg.AppBaseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
 	})

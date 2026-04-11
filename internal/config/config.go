@@ -36,6 +36,7 @@ type Config struct {
 
 	ScannerInterval  time.Duration `envconfig:"SCANNER_INTERVAL" default:"5m"`
 	NotifierInterval time.Duration `envconfig:"NOTIFIER_INTERVAL" default:"30s"`
+	ConfirmerInterval time.Duration `envconfig:"CONFIRMER_INTERVAL" default:"30s"`
 }
 
 func Load() (Config, error) {
