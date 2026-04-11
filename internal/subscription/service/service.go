@@ -116,10 +116,9 @@ func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error
 	}
 
 	if err := s.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
-		To:             p.Email,
-		ConfirmURL:     s.appBaseURL + "/api/confirm/" + confirmToken,
-		RepoFullName:   p.Repository,
-		UnsubscribeURL: s.appBaseURL + "/api/unsubscribe/" + unsubscribeToken,
+		To:           p.Email,
+		ConfirmURL:   s.appBaseURL + "/api/confirm/" + confirmToken,
+		RepoFullName: p.Repository,
 	}); err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Str("email", p.Email).Msg("failed to send confirmation email")
 		return fmt.Errorf("send confirmation: %w", err)

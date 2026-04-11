@@ -9,6 +9,3 @@ This link expires in 24 hours.
 
 If you did not request this, you can safely ignore this email.
 
----
-To unsubscribe at any time, visit:
-{{.UnsubscribeURL}}

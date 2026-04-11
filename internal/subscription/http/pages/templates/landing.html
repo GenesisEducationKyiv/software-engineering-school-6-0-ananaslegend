@@ -144,7 +144,7 @@
     <form class="form" id="subscribe-form" onsubmit="handleSubmit(event)">
       <input type="text" id="repo" name="repository" placeholder="owner/repository" autocomplete="off" required>
       <input type="email" id="email" name="email" placeholder="your@email.com" autocomplete="email" required>
-      <button type="submit" id="submit-btn">Watch repository →</button>
+      <button type="submit" id="submit-btn">Subscribe repository →</button>
       <p class="error" id="error-msg" aria-live="polite"></p>
     </form>
     <div class="chips">
@@ -220,7 +220,7 @@
         errorEl.textContent = 'Something went wrong. Please try again.';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Watch repository \u2192';
+        btn.textContent = 'Subscribe repository \u2192';
       }
     }
   </script>
