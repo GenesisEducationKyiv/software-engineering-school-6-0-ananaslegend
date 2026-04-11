@@ -151,7 +151,7 @@ func main() {
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
 	})
 	subHandler := subhttp.NewHandler(svc, httpapi.WriteError)
-	router := httpapi.NewRouter(log, subHandler)
+	router := httpapi.NewRouter(httpapi.RouterConfig{Log: log, SubHandler: subHandler})
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
