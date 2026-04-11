@@ -41,12 +41,12 @@ func TestGetLatestReleases_HappyPath(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data": map[string]any{
 				"r1": map[string]any{"latestRelease": map[string]any{"tagName": "go1.22.0"}},
 				"r2": map[string]any{"latestRelease": nil},
 			},
-		})
+		}))
 	})
 
 	tags, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
@@ -73,9 +73,9 @@ func TestGetLatestReleases_BearerTokenSent(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
 			"r1": map[string]any{"latestRelease": map[string]any{"tagName": "v1.0"}},
-		}})
+		}}))
 	})
 	c.token = "mytoken"
 
