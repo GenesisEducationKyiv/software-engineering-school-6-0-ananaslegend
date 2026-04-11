@@ -88,3 +88,37 @@ func TestCachingReleaseProvider_PartialHitMiss(t *testing.T) {
 	assert.Equal(t, "v2.0.0", tags[2])
 	assert.Equal(t, 2, stub.calls)
 }
+
+func TestCachingReleaseProvider_NoRelease_NotCached(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	stub := &stubProvider{result: map[int64]string{}} // repo has no release
+	c := NewCachingClient(stub, rdb, time.Minute)
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar"}}
+
+	tags, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+	assert.Empty(t, tags)
+	assert.Equal(t, 1, stub.calls)
+
+	// Second call — no-release was not cached, wrapped must be called again
+	tags, err = c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+	assert.Empty(t, tags)
+	assert.Equal(t, 2, stub.calls)
+}
+
+func TestCachingReleaseProvider_RedisError_Fallback(t *testing.T) {
+	rdb, mr := newTestRedis(t)
+	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
+	c := NewCachingClient(stub, rdb, time.Minute)
+
+	mr.Close() // simulate Redis unavailable
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "golang", Name: "go"}}
+	tags, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+
+	require.NoError(t, err) // no error — silently fell back
+	assert.Equal(t, "v1.0.0", tags[1])
+	assert.Equal(t, 1, stub.calls)
+}
