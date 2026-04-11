@@ -3,14 +3,18 @@ package notifier_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/mock/gomock"
 
 	"github.com/ananaslegend/reposeetory/internal/notifier"
 	"github.com/ananaslegend/reposeetory/internal/notifier/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 func newNotifier(t *testing.T) (*notifier.Notifier, *mocks.MockRepository, *mocks.MockMailSender) {
@@ -96,6 +100,35 @@ func TestNotifier_FlushMultipleNotifications_ProcessedInOrder(t *testing.T) {
 	m.EXPECT().SendRelease(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	n.Flush(context.Background())
+}
+
+func newNotifierWithRegistry(t *testing.T) (*notifier.Notifier, *mocks.MockRepository, *mocks.MockMailSender, *prometheus.Registry) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	m := mocks.NewMockMailSender(ctrl)
+	reg := prometheus.NewRegistry()
+	n := notifier.New(notifier.Config{Repo: repo, Mailer: m, Registry: reg})
+	return n, repo, m, reg
+}
+
+func TestNotifier_Flush_IncrementsEmailSentMetric(t *testing.T) {
+	n, repo, m, reg := newNotifierWithRegistry(t)
+
+	gomock.InOrder(
+		repo.EXPECT().ProcessNext(gomock.Any(), gomock.Any()).DoAndReturn(invokeProcessNext(testPending, true)),
+		repo.EXPECT().ProcessNext(gomock.Any(), gomock.Any()).Return(false, nil),
+	)
+	m.EXPECT().SendRelease(gomock.Any(), gomock.Any()).Return(nil)
+
+	n.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP notifier_emails_sent_total Total number of release emails attempted.
+		# TYPE notifier_emails_sent_total counter
+		notifier_emails_sent_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "notifier_emails_sent_total"))
 }
 
 // suppress unused import warning

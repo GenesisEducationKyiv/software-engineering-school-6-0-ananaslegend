@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
+
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/rs/zerolog"
 )
 
 // ScanResult describes one repo whose tag changed during a scan tick.
@@ -39,6 +41,7 @@ type Config struct {
 	Repo     Repository
 	GitHub   ReleaseProvider
 	Interval time.Duration
+	Registry *prometheus.Registry
 }
 
 // Scanner periodically checks GitHub for new releases and writes outbox rows.
@@ -46,13 +49,19 @@ type Scanner struct {
 	repo     Repository
 	github   ReleaseProvider
 	interval time.Duration
+	m        scannerMetrics
 }
 
 const scanLimit = 100
 
 // New creates a Scanner from cfg.
 func New(cfg Config) *Scanner {
-	return &Scanner{repo: cfg.Repo, github: cfg.GitHub, interval: cfg.Interval}
+	return &Scanner{
+		repo:     cfg.Repo,
+		github:   cfg.GitHub,
+		interval: cfg.Interval,
+		m:        newScannerMetrics(cfg.Registry),
+	}
 }
 
 // Run blocks until ctx is cancelled, firing a scan tick on each interval.
@@ -74,10 +83,11 @@ func (s *Scanner) Run(ctx context.Context) {
 
 // Tick executes one scan cycle. Exported for testing.
 func (s *Scanner) Tick(ctx context.Context) error {
-	return s.repo.RunInTx(ctx, scanLimit, func(ctx context.Context, repos []domain.GitHubRepo) ([]ScanResult, error) {
+	err := s.repo.RunInTx(ctx, scanLimit, func(ctx context.Context, repos []domain.GitHubRepo) ([]ScanResult, error) {
 		if len(repos) == 0 {
 			return nil, nil
 		}
+		s.m.reposScanned.Add(float64(len(repos)))
 
 		tags, err := s.github.GetLatestReleases(ctx, githubclient.GetLatestReleasesParams{Repos: repos})
 		if err != nil {
@@ -106,4 +116,10 @@ func (s *Scanner) Tick(ctx context.Context) error {
 		}
 		return results, nil
 	})
+	if err != nil {
+		s.m.ticksTotal.WithLabelValues("error").Inc()
+		return err
+	}
+	s.m.ticksTotal.WithLabelValues("ok").Inc()
+	return nil
 }

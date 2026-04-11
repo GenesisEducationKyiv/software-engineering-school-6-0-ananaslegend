@@ -6,8 +6,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
 // PendingConfirmation is one outbox row joined with subscription + repository data.
@@ -38,6 +40,7 @@ type Config struct {
 	Mailer   MailSender
 	Interval time.Duration
 	BaseURL  string
+	Registry *prometheus.Registry
 }
 
 // Confirmer periodically drains the confirmation_notifications outbox by sending emails.
@@ -46,11 +49,18 @@ type Confirmer struct {
 	mailer   MailSender
 	interval time.Duration
 	baseURL  string
+	m        confirmerMetrics
 }
 
 // New creates a Confirmer from cfg.
 func New(cfg Config) *Confirmer {
-	return &Confirmer{repo: cfg.Repo, mailer: cfg.Mailer, interval: cfg.Interval, baseURL: cfg.BaseURL}
+	return &Confirmer{
+		repo:     cfg.Repo,
+		mailer:   cfg.Mailer,
+		interval: cfg.Interval,
+		baseURL:  cfg.BaseURL,
+		m:        newConfirmerMetrics(cfg.Registry),
+	}
 }
 
 // Run blocks until ctx is cancelled, flushing the outbox on each interval.
@@ -71,11 +81,17 @@ func (c *Confirmer) Run(ctx context.Context) {
 func (c *Confirmer) Flush(ctx context.Context) {
 	for {
 		processed, err := c.repo.ProcessNext(ctx, func(ctx context.Context, pending PendingConfirmation) error {
-			return c.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
+			sendErr := c.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
 				To:           pending.Email,
 				ConfirmURL:   c.baseURL + "/api/confirm/" + pending.ConfirmToken,
 				RepoFullName: pending.RepoOwner + "/" + pending.RepoName,
 			})
+			if sendErr != nil {
+				c.m.emailsSent.WithLabelValues("error").Inc()
+			} else {
+				c.m.emailsSent.WithLabelValues("ok").Inc()
+			}
+			return sendErr
 		})
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Msg("confirmer: process next failed")

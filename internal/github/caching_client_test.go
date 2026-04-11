@@ -2,10 +2,13 @@ package github
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +43,7 @@ func newTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 func TestCachingReleaseProvider_CacheMiss(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
-	c := NewCachingClient(stub, rdb, time.Minute)
+	c := NewCachingClient(CachingConfig{Provider: stub, RDB: rdb, TTL: time.Minute})
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "golang", Name: "go"}}
 	tags, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
@@ -53,7 +56,7 @@ func TestCachingReleaseProvider_CacheMiss(t *testing.T) {
 func TestCachingReleaseProvider_CacheHit(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
-	c := NewCachingClient(stub, rdb, time.Minute)
+	c := NewCachingClient(CachingConfig{Provider: stub, RDB: rdb, TTL: time.Minute})
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "golang", Name: "go"}}
 
@@ -71,7 +74,7 @@ func TestCachingReleaseProvider_CacheHit(t *testing.T) {
 func TestCachingReleaseProvider_PartialHitMiss(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	stub := &stubProvider{result: map[int64]string{1: "v1.0.0", 2: "v2.0.0"}}
-	c := NewCachingClient(stub, rdb, time.Minute)
+	c := NewCachingClient(CachingConfig{Provider: stub, RDB: rdb, TTL: time.Minute})
 
 	repo1 := domain.GitHubRepo{ID: 1, Owner: "golang", Name: "go"}
 	repo2 := domain.GitHubRepo{ID: 2, Owner: "torvalds", Name: "linux"}
@@ -92,7 +95,7 @@ func TestCachingReleaseProvider_PartialHitMiss(t *testing.T) {
 func TestCachingReleaseProvider_NoRelease_NotCached(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	stub := &stubProvider{result: map[int64]string{}} // repo has no release
-	c := NewCachingClient(stub, rdb, time.Minute)
+	c := NewCachingClient(CachingConfig{Provider: stub, RDB: rdb, TTL: time.Minute})
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar"}}
 
@@ -108,10 +111,37 @@ func TestCachingReleaseProvider_NoRelease_NotCached(t *testing.T) {
 	assert.Equal(t, 2, stub.calls)
 }
 
+func TestCachingClient_MetricsCacheHit(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	reg := prometheus.NewRegistry()
+	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
+	c := NewCachingClient(CachingConfig{Provider: stub, RDB: rdb, TTL: time.Minute, Registry: reg})
+
+	repos := []domain.GitHubRepo{{ID: 1}}
+	ctx := context.Background()
+
+	// first call — miss, populates cache
+	_, err := c.GetLatestReleases(ctx, GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+
+	// second call — hit
+	_, err = c.GetLatestReleases(ctx, GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(`
+# HELP github_cache_hits_total Total number of GitHub release cache hits.
+# TYPE github_cache_hits_total counter
+github_cache_hits_total 1
+# HELP github_cache_misses_total Total number of GitHub release cache misses.
+# TYPE github_cache_misses_total counter
+github_cache_misses_total 1
+`), "github_cache_hits_total", "github_cache_misses_total"))
+}
+
 func TestCachingReleaseProvider_RedisError_Fallback(t *testing.T) {
 	rdb, mr := newTestRedis(t)
 	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
-	c := NewCachingClient(stub, rdb, time.Minute)
+	c := NewCachingClient(CachingConfig{Provider: stub, RDB: rdb, TTL: time.Minute})
 
 	mr.Close() // simulate Redis unavailable
 

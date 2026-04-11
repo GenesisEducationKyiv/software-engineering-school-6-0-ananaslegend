@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
 // PendingNotification is one outbox row joined with subscription + repository data.
@@ -41,6 +43,7 @@ type Config struct {
 	Mailer   MailSender
 	Interval time.Duration
 	BaseURL  string
+	Registry *prometheus.Registry
 }
 
 // Notifier periodically drains the release_notifications outbox by sending emails.
@@ -49,11 +52,18 @@ type Notifier struct {
 	mailer   MailSender
 	interval time.Duration
 	baseURL  string
+	m        notifierMetrics
 }
 
 // New creates a Notifier from cfg.
 func New(cfg Config) *Notifier {
-	return &Notifier{repo: cfg.Repo, mailer: cfg.Mailer, interval: cfg.Interval, baseURL: cfg.BaseURL}
+	return &Notifier{
+		repo:     cfg.Repo,
+		mailer:   cfg.Mailer,
+		interval: cfg.Interval,
+		baseURL:  cfg.BaseURL,
+		m:        newNotifierMetrics(cfg.Registry),
+	}
 }
 
 // Run blocks until ctx is cancelled, flushing the outbox on each interval.
@@ -72,9 +82,12 @@ func (n *Notifier) Run(ctx context.Context) {
 
 // Flush drains all currently pending notifications. Exported for testing.
 func (n *Notifier) Flush(ctx context.Context) {
+	start := time.Now()
+	defer func() { n.m.flushDuration.Observe(time.Since(start).Seconds()) }()
+
 	for {
 		processed, err := n.repo.ProcessNext(ctx, func(ctx context.Context, pending PendingNotification) error {
-			return n.mailer.SendRelease(ctx, domain.SendReleaseParams{
+			sendErr := n.mailer.SendRelease(ctx, domain.SendReleaseParams{
 				To:           pending.Email,
 				RepoFullName: pending.RepoOwner + "/" + pending.RepoName,
 				ReleaseTag:   pending.ReleaseTag,
@@ -82,6 +95,12 @@ func (n *Notifier) Flush(ctx context.Context) {
 					pending.RepoOwner, pending.RepoName, pending.ReleaseTag),
 				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, pending.UnsubscribeToken),
 			})
+			if sendErr != nil {
+				n.m.emailsSent.WithLabelValues("error").Inc()
+			} else {
+				n.m.emailsSent.WithLabelValues("ok").Inc()
+			}
+			return sendErr
 		})
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Msg("notifier: process next failed")

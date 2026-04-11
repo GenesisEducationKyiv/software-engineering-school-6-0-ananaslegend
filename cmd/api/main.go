@@ -23,6 +23,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
@@ -80,6 +81,13 @@ func main() {
 	}
 	defer pool.Close()
 
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		postgres.NewPoolCollector(pool),
+	)
+
 	var mailSender fullMailer
 	switch {
 	case cfg.ResendAPIKey != "":
@@ -113,7 +121,12 @@ func main() {
 			log.Warn().Err(err).Msg("redis unavailable, github caching disabled")
 		} else {
 			defer rdb.Close()
-			releaseProvider = githubclient.NewCachingClient(githubClient, rdb, 10*time.Minute)
+			releaseProvider = githubclient.NewCachingClient(githubclient.CachingConfig{
+				Provider: githubClient,
+				RDB:      rdb,
+				TTL:      10 * time.Minute,
+				Registry: reg,
+			})
 			log.Info().Msg("github release cache: redis")
 		}
 	} else {
@@ -124,6 +137,7 @@ func main() {
 		Repo:     scannerrepo.New(pool),
 		GitHub:   releaseProvider,
 		Interval: cfg.ScannerInterval,
+		Registry: reg,
 	})
 
 	notify := notifier.New(notifier.Config{
@@ -131,6 +145,7 @@ func main() {
 		Mailer:   mailSender,
 		Interval: cfg.NotifierInterval,
 		BaseURL:  cfg.AppBaseURL,
+		Registry: reg,
 	})
 
 	go scan.Run(ctx)
@@ -141,6 +156,7 @@ func main() {
 		Mailer:   mailSender,
 		Interval: cfg.ConfirmerInterval,
 		BaseURL:  cfg.AppBaseURL,
+		Registry: reg,
 	})
 	go confirm.Run(ctx)
 
@@ -149,9 +165,10 @@ func main() {
 		GitHub:          githubclient.NewStubClient(),
 		AppBaseURL:      cfg.AppBaseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
+		Registry:        reg,
 	})
 	subHandler := subhttp.NewHandler(svc, httpapi.WriteError)
-	router := httpapi.NewRouter(httpapi.RouterConfig{Log: log, SubHandler: subHandler})
+	router := httpapi.NewRouter(httpapi.RouterConfig{Log: log, SubHandler: subHandler, Registry: reg})
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
