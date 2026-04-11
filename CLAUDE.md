@@ -13,6 +13,8 @@ GitHub Release Notification API. Користувачі підписуються
 | Mocks | `go.uber.org/mock` + `mockgen` |
 | Migrations | `golang-migrate` CLI (окремо, не на старті бінарника) |
 | Email | `github.com/wneessen/go-mail` (multipart HTML+text, STARTTLS/SSL/none) |
+| Redis cache | `github.com/redis/go-redis/v9` (кешування GitHub releases) |
+| Redis test | `github.com/alicebob/miniredis/v2` (in-process Redis для unit-тестів) |
 
 ## Архітектура папок
 
@@ -23,10 +25,12 @@ internal/
   logger/logger.go                       # zerolog init
   httpapi/                               # cross-cutting HTTP: router, middlewares, error writer
   storage/postgres/pool.go               # NewPool() → *pgxpool.Pool
+  storage/redis/client.go                # NewClient() → *redis.Client (ping on start; pkg alias goredis)
   github/
     client.go                            # реальний GitHub GraphQL клієнт (batch release fetching)
     client_test.go                       # тести з httptest.Server
     stub.go                              # StubClient (для subscription service)
+    caching_client.go                    # CachingReleaseProvider декоратор (Redis MGET + pipeline SET)
   scanner/                               # feature-модуль: перевірка нових релізів
     scanner.go                           # Scanner.Run/Tick; інтерфейси Repository, ReleaseProvider
     scanner_test.go
@@ -166,6 +170,7 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 - `ScanResult` може бути: `BumpOnly=true` (тег не змінився або релізів нема), `IsFirstScan=true` (перший раз бачимо тег — не нотифікувати), або `NewTag` зі `IsFirstScan=false` → вставляє рядки в `release_notifications`
 - Транзакція передається через context (`txKey{}` struct — приватний ключ контексту)
 - **Без `GITHUB_TOKEN` сканер не запускається** (GraphQL API повертає 403 без токена)
+- `Scanner.GitHub` — `ReleaseProvider` інтерфейс; в `main.go` загортається в `CachingReleaseProvider` якщо `REDIS_URL` задано
 
 **Notifier** (`internal/notifier/`) дренує outbox `release_notifications`:
 - `Notifier.Flush(ctx)` — цикл: `ProcessNext` → один pending запис FOR UPDATE SKIP LOCKED → надсилає email → `sent_at = NOW()` → commit
@@ -199,6 +204,20 @@ id BIGSERIAL, subscription_id REFERENCES subscriptions ON DELETE CASCADE, create
 ### Subscription service — без MailSender
 `internal/subscription/service/service.go` не має `MailSender` інтерфейсу і не надсилає email. Підтвердження тепер повністю асинхронне через outbox. Сервіс відповідає лише за валідацію, upsert репозиторію і `CreateSubscription` (яка атомарно створює і subscription, і confirmation outbox row).
 
+### CachingReleaseProvider — Redis-кеш GitHub releases
+
+`internal/github/caching_client.go` — декоратор над `ReleaseProvider`:
+- Ключ: `github:release:{repoID}`, TTL: 10 хвилин
+- Читання: `MGET` (один round-trip на всі репо)
+- Запис: pipeline `SET` тільки для репо з тегом (без релізу — не кешуємо)
+- Помилка Redis → `log.Warn` + silent fallback на wrapped provider, без помилки назовні
+- Тип assertion з `vals[i].(string)` — через safe two-value form; при unexpected type → treat as miss
+- Тести у `caching_client_test.go` через `miniredis` (in-process): cache miss, hit, partial, no-release, Redis error
+
+Wiring у `main.go`: `var releaseProvider scanner.ReleaseProvider = githubClient` → якщо `REDIS_URL` задано → обгортається у `CachingReleaseProvider`. При помилці підключення → `log.Warn`, fallback на голий клієнт. `defer rdb.Close()` — тільки якщо підключенн�� успішне.
+
+`internal/storage/redis/client.go`: package `redis`, але import аліасується як `goredis` (щоб уникнути collision з назвою пакету). В `main.go` — `redisstorage "github.com/ananaslegend/reposeetory/internal/storage/redis"`.
+
 ### main.go — fullMailer
 У `cmd/api/main.go` оголошений локальний unexported інтерфейс:
 ```go
@@ -216,7 +235,7 @@ TLS-політика конфігурується через `SMTP_TLS_POLICY`: 
 Якщо `SMTP_HOST` порожній — `main.go` використовує `StubMailer`.
 
 ### Docker / локальне оточення
-`make docker-up` піднімає повний стек: postgres → migrate → api + mailpit (:8025).
+`make docker-up` піднімає повний стек: postgres → migrate → api + mailpit (:8025) + redis (:6379).
 Залежності вендоруються (`go mod vendor`) і білд у Docker використовує `-mod=vendor` — обхід корпоративного SSL-проксі, який перехоплює TLS всередині контейнера.
 Не використовувати `apk add` у runtime-стейджі з тієї ж причини; CA-сертифікати копіюються з builder-стейджу.
 
@@ -263,6 +282,7 @@ TLS-політика конфігурується через `SMTP_TLS_POLICY`: 
 | `SCANNER_INTERVAL` | `5m` | Інтервал між тіками сканера |
 | `NOTIFIER_INTERVAL` | `30s` | Інтервал між тіками нотифікатора |
 | `CONFIRMER_INTERVAL` | `30s` | Інтервал між тіками confirmer'а |
+| `REDIS_URL` | `` | Redis connection URL; якщо порожній — GitHub кеш вимкнено (log `INFO`) |
 
 Скопіювати `.env.example` → `.env` перед першим запуском.
 
