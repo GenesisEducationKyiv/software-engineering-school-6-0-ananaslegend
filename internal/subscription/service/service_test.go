@@ -2,7 +2,6 @@ package service_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -14,20 +13,18 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func newSvc(t *testing.T) (*service.Service, *mocks.MockRepository, *mocks.MockRemoteRepositoryProvider, *mocks.MockMailSender) {
+func newSvc(t *testing.T) (*service.Service, *mocks.MockRepository, *mocks.MockRemoteRepositoryProvider) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockRepository(ctrl)
 	gh := mocks.NewMockRemoteRepositoryProvider(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
 	svc := service.New(service.Config{
 		Repo:            repo,
 		GitHub:          gh,
-		Mailer:          m,
 		AppBaseURL:      "http://localhost:8080",
 		ConfirmTokenTTL: 24 * time.Hour,
 	})
-	return svc, repo, gh, m
+	return svc, repo, gh
 }
 
 var validSubscribeParams = domain.SubscribeParams{
@@ -38,19 +35,18 @@ var validSubscribeParams = domain.SubscribeParams{
 // --- Subscribe ---
 
 func TestSubscribe_HappyPath(t *testing.T) {
-	svc, repo, gh, m := newSvc(t)
+	svc, repo, gh := newSvc(t)
 
 	gh.EXPECT().RepoExists(gomock.Any(), domain.RepoExistsParams{Owner: "golang", Name: "go"}).Return(true, nil)
 	repo.EXPECT().UpsertRepo(gomock.Any(), domain.UpsertRepoParams{Owner: "golang", Name: "go"}).Return(int64(1), nil)
 	repo.EXPECT().CreateSubscription(gomock.Any(), gomock.Any()).Return(&domain.Subscription{ID: 1}, nil)
-	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
 
 	err := svc.Subscribe(context.Background(), validSubscribeParams)
 	require.NoError(t, err)
 }
 
 func TestSubscribe_InvalidRepoFormat(t *testing.T) {
-	svc, _, _, _ := newSvc(t)
+	svc, _, _ := newSvc(t)
 
 	err := svc.Subscribe(context.Background(), domain.SubscribeParams{Email: "vasya@example.com", Repository: "not-a-repo"})
 	assert.ErrorIs(t, err, domain.ErrInvalidRepoFormat)
@@ -66,11 +62,10 @@ func TestSubscribe_FullRepoURL(t *testing.T) {
 	}
 	for _, url := range urls {
 		t.Run(url, func(t *testing.T) {
-			svc, repo, gh, m := newSvc(t)
+			svc, repo, gh := newSvc(t)
 			gh.EXPECT().RepoExists(gomock.Any(), domain.RepoExistsParams{Owner: "golang", Name: "go"}).Return(true, nil)
 			repo.EXPECT().UpsertRepo(gomock.Any(), domain.UpsertRepoParams{Owner: "golang", Name: "go"}).Return(int64(1), nil)
 			repo.EXPECT().CreateSubscription(gomock.Any(), gomock.Any()).Return(&domain.Subscription{ID: 1}, nil)
-			m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
 
 			err := svc.Subscribe(context.Background(), domain.SubscribeParams{Email: "vasya@example.com", Repository: url})
 			require.NoError(t, err)
@@ -79,7 +74,7 @@ func TestSubscribe_FullRepoURL(t *testing.T) {
 }
 
 func TestSubscribe_RepoNotFound(t *testing.T) {
-	svc, _, gh, _ := newSvc(t)
+	svc, _, gh := newSvc(t)
 
 	gh.EXPECT().RepoExists(gomock.Any(), gomock.Any()).Return(false, nil)
 
@@ -88,7 +83,7 @@ func TestSubscribe_RepoNotFound(t *testing.T) {
 }
 
 func TestSubscribe_AlreadyExists(t *testing.T) {
-	svc, repo, gh, _ := newSvc(t)
+	svc, repo, gh := newSvc(t)
 
 	gh.EXPECT().RepoExists(gomock.Any(), gomock.Any()).Return(true, nil)
 	repo.EXPECT().UpsertRepo(gomock.Any(), gomock.Any()).Return(int64(1), nil)
@@ -98,22 +93,10 @@ func TestSubscribe_AlreadyExists(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrAlreadyExists)
 }
 
-func TestSubscribe_MailerFailure_ReturnsError(t *testing.T) {
-	svc, repo, gh, m := newSvc(t)
-
-	gh.EXPECT().RepoExists(gomock.Any(), gomock.Any()).Return(true, nil)
-	repo.EXPECT().UpsertRepo(gomock.Any(), gomock.Any()).Return(int64(1), nil)
-	repo.EXPECT().CreateSubscription(gomock.Any(), gomock.Any()).Return(&domain.Subscription{ID: 1}, nil)
-	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(errors.New("smtp timeout"))
-
-	err := svc.Subscribe(context.Background(), validSubscribeParams)
-	require.Error(t, err)
-}
-
 // --- Confirm ---
 
 func TestConfirm_HappyPath(t *testing.T) {
-	svc, repo, _, _ := newSvc(t)
+	svc, repo, _ := newSvc(t)
 
 	exp := time.Now().Add(time.Hour)
 	token := "validtoken"
@@ -126,7 +109,7 @@ func TestConfirm_HappyPath(t *testing.T) {
 }
 
 func TestConfirm_TokenNotFound(t *testing.T) {
-	svc, repo, _, _ := newSvc(t)
+	svc, repo, _ := newSvc(t)
 
 	repo.EXPECT().GetByConfirmToken(gomock.Any(), "nosuchtoken").Return(nil, domain.ErrTokenNotFound)
 
@@ -135,7 +118,7 @@ func TestConfirm_TokenNotFound(t *testing.T) {
 }
 
 func TestConfirm_TokenExpired(t *testing.T) {
-	svc, repo, _, _ := newSvc(t)
+	svc, repo, _ := newSvc(t)
 
 	past := time.Now().Add(-time.Hour)
 	token := "expiredtoken"
@@ -149,7 +132,7 @@ func TestConfirm_TokenExpired(t *testing.T) {
 // --- Unsubscribe ---
 
 func TestUnsubscribe_HappyPath(t *testing.T) {
-	svc, repo, _, _ := newSvc(t)
+	svc, repo, _ := newSvc(t)
 
 	repo.EXPECT().DeleteByUnsubscribeToken(gomock.Any(), "sometoken").Return(true, nil)
 
@@ -158,7 +141,7 @@ func TestUnsubscribe_HappyPath(t *testing.T) {
 }
 
 func TestUnsubscribe_TokenNotFound(t *testing.T) {
-	svc, repo, _, _ := newSvc(t)
+	svc, repo, _ := newSvc(t)
 
 	repo.EXPECT().DeleteByUnsubscribeToken(gomock.Any(), "nosuchtoken").Return(false, nil)
 

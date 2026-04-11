@@ -41,17 +41,10 @@ type RemoteRepositoryProvider interface {
 	RepoExists(ctx context.Context, p domain.RepoExistsParams) (bool, error)
 }
 
-// MailSender sends transactional emails.
-type MailSender interface {
-	SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error
-	SendRelease(ctx context.Context, p domain.SendReleaseParams) error
-}
-
 // Config holds all dependencies and settings for Service.
 type Config struct {
 	Repo            Repository
 	GitHub          RemoteRepositoryProvider
-	Mailer          MailSender
 	AppBaseURL      string
 	ConfirmTokenTTL time.Duration
 }
@@ -59,7 +52,6 @@ type Config struct {
 type Service struct {
 	repo            Repository
 	github          RemoteRepositoryProvider
-	mailer          MailSender
 	appBaseURL      string
 	confirmTokenTTL time.Duration
 }
@@ -68,7 +60,6 @@ func New(cfg Config) *Service {
 	return &Service{
 		repo:            cfg.Repo,
 		github:          cfg.GitHub,
-		mailer:          cfg.Mailer,
 		appBaseURL:      cfg.AppBaseURL,
 		confirmTokenTTL: cfg.ConfirmTokenTTL,
 	}
@@ -113,15 +104,6 @@ func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error
 	})
 	if err != nil {
 		return err // ErrAlreadyExists propagated as-is
-	}
-
-	if err := s.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
-		To:           p.Email,
-		ConfirmURL:   s.appBaseURL + "/api/confirm/" + confirmToken,
-		RepoFullName: p.Repository,
-	}); err != nil {
-		zerolog.Ctx(ctx).Error().Err(err).Str("email", p.Email).Msg("failed to send confirmation email")
-		return fmt.Errorf("send confirmation: %w", err)
 	}
 
 	zerolog.Ctx(ctx).Info().
