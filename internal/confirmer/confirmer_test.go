@@ -8,7 +8,6 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -95,5 +94,3 @@ func TestConfirmer_FlushMultiple_ProcessedInOrder(t *testing.T) {
 	c.Flush(context.Background())
 }
 
-// suppress unused import warning
-var _ = assert.New
