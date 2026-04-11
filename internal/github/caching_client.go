@@ -5,14 +5,24 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
-type releaseProvider interface {
+// ReleaseProvider is the interface for fetching the latest release tags.
+type ReleaseProvider interface {
 	GetLatestReleases(ctx context.Context, p GetLatestReleasesParams) (map[int64]string, error)
+}
+
+// CachingConfig holds dependencies for CachingReleaseProvider.
+type CachingConfig struct {
+	Provider ReleaseProvider
+	RDB      *redis.Client
+	TTL      time.Duration
+	Registry *prometheus.Registry
 }
 
 // CachingReleaseProvider wraps a ReleaseProvider with Redis caching.
@@ -20,13 +30,19 @@ type releaseProvider interface {
 // Repos with no release are never cached — GitHub is queried on every tick.
 // Redis errors fall back to the wrapped provider without returning an error.
 type CachingReleaseProvider struct {
-	wrapped releaseProvider
+	wrapped ReleaseProvider
 	rdb     *redis.Client
 	ttl     time.Duration
+	m       cacheMetrics
 }
 
-func NewCachingClient(wrapped releaseProvider, rdb *redis.Client, ttl time.Duration) *CachingReleaseProvider {
-	return &CachingReleaseProvider{wrapped: wrapped, rdb: rdb, ttl: ttl}
+func NewCachingClient(cfg CachingConfig) *CachingReleaseProvider {
+	return &CachingReleaseProvider{
+		wrapped: cfg.Provider,
+		rdb:     cfg.RDB,
+		ttl:     cfg.TTL,
+		m:       newCacheMetrics(cfg.Registry),
+	}
 }
 
 func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLatestReleasesParams) (map[int64]string, error) {
@@ -44,6 +60,7 @@ func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLat
 	vals, err := c.rdb.MGet(ctx, keys...).Result()
 	if err != nil {
 		log.Warn().Err(err).Msg("redis mget failed, falling back to github")
+		c.m.errors.Inc()
 		return c.wrapped.GetLatestReleases(ctx, p)
 	}
 
@@ -53,10 +70,13 @@ func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLat
 	for i, repo := range p.Repos {
 		if vals[i] == nil {
 			misses = append(misses, repo)
+			c.m.misses.Inc()
 		} else if s, ok := vals[i].(string); ok {
 			result[repo.ID] = s
+			c.m.hits.Inc()
 		} else {
 			misses = append(misses, repo)
+			c.m.misses.Inc()
 		}
 	}
 

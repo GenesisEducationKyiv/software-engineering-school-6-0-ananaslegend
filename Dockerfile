@@ -9,6 +9,7 @@ COPY migrations/ migrations/
 # Source layer — invalidated only when Go source changes
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY docs/ docs/
 
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /api ./cmd/api
 

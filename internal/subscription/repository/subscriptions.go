@@ -92,3 +92,30 @@ func (r *Repository) DeleteByUnsubscribeToken(ctx context.Context, token string)
 	}
 	return tag.RowsAffected() > 0, nil
 }
+
+func (r *Repository) ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT s.id, r.owner, r.name, s.confirmed_at, s.created_at
+		FROM subscriptions s
+		JOIN repositories r ON r.id = s.repository_id
+		WHERE s.email = $1 AND s.confirmed_at IS NOT NULL
+		ORDER BY s.created_at DESC
+	`, email)
+	if err != nil {
+		return nil, fmt.Errorf("list by email: %w", err)
+	}
+	defer rows.Close()
+
+	var result []domain.SubscriptionView
+	for rows.Next() {
+		var v domain.SubscriptionView
+		if err := rows.Scan(&v.ID, &v.RepoOwner, &v.RepoName, &v.ConfirmedAt, &v.CreatedAt); err != nil {
+			return nil, fmt.Errorf("list by email: scan: %w", err)
+		}
+		result = append(result, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list by email: rows: %w", err)
+	}
+	return result, nil
+}

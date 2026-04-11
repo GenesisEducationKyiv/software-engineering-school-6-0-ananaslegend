@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
 var repoNameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
@@ -34,6 +36,7 @@ type Repository interface {
 	GetByConfirmToken(ctx context.Context, token string) (*domain.Subscription, error)
 	MarkConfirmed(ctx context.Context, p domain.MarkConfirmedParams) error
 	DeleteByUnsubscribeToken(ctx context.Context, token string) (bool, error)
+	ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error)
 }
 
 // RemoteRepositoryProvider checks whether a GitHub repository exists.
@@ -47,6 +50,7 @@ type Config struct {
 	GitHub          RemoteRepositoryProvider
 	AppBaseURL      string
 	ConfirmTokenTTL time.Duration
+	Registry        *prometheus.Registry
 }
 
 type Service struct {
@@ -54,6 +58,7 @@ type Service struct {
 	github          RemoteRepositoryProvider
 	appBaseURL      string
 	confirmTokenTTL time.Duration
+	m               serviceMetrics
 }
 
 func New(cfg Config) *Service {
@@ -62,6 +67,7 @@ func New(cfg Config) *Service {
 		github:          cfg.GitHub,
 		appBaseURL:      cfg.AppBaseURL,
 		confirmTokenTTL: cfg.ConfirmTokenTTL,
+		m:               newServiceMetrics(cfg.Registry),
 	}
 }
 
@@ -111,6 +117,7 @@ func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error
 		Str("repo", p.Repository).
 		Int64("repo_id", repoID).
 		Msg("subscription created")
+	s.m.subscriptionsCreated.Inc()
 	return nil
 }
 
@@ -130,6 +137,7 @@ func (s *Service) Confirm(ctx context.Context, token string) error {
 	}
 
 	zerolog.Ctx(ctx).Info().Int64("subscription_id", sub.ID).Msg("subscription confirmed")
+	s.m.subscriptionsConfirmed.Inc()
 	return nil
 }
 
@@ -143,5 +151,14 @@ func (s *Service) Unsubscribe(ctx context.Context, token string) error {
 	}
 
 	zerolog.Ctx(ctx).Info().Msg("unsubscribed")
+	s.m.subscriptionsDeleted.Inc()
 	return nil
+}
+
+func (s *Service) ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error) {
+	subs, err := s.repo.ListByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("list by email: %w", err)
+	}
+	return subs, nil
 }

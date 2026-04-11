@@ -10,10 +10,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	status := statusFor(err)
 	if status == http.StatusInternalServerError {
@@ -22,7 +18,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorResponse{Error: userMessage(err, status)})
+	_ = json.NewEncoder(w).Encode(subhttp.ErrorResponse{Error: userMessage(err, status)})
 }
 
 func statusFor(err error) int {

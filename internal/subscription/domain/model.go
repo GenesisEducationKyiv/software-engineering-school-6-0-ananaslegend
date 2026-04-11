@@ -24,6 +24,14 @@ type Subscription struct {
 	CreatedAt             time.Time
 }
 
+type SubscriptionView struct {
+	ID          int64
+	RepoOwner   string
+	RepoName    string
+	ConfirmedAt *time.Time
+	CreatedAt   time.Time
+}
+
 // --- Params (one per cross-package call with > 2 args) ---
 
 type SubscribeParams struct {

@@ -2,7 +2,7 @@ BINARY          = bin/api
 MIGRATIONS_PATH = ./migrations
 DB_URL         ?= postgres://postgres:pass@localhost:5432/postgres?sslmode=disable
 
-.PHONY: build run test vet generate tidy lint migrate-up migrate-down clean
+.PHONY: build run test vet generate tidy lint migrate-up migrate-down clean swagger
 
 build:
 	go build -o $(BINARY) ./cmd/api
@@ -30,6 +30,9 @@ migrate-up:
 
 migrate-down:
 	migrate -path $(MIGRATIONS_PATH) -database "$(DB_URL)" down 1
+
+swagger:
+	swag init -g cmd/api/main.go -o docs --parseDependency
 
 clean:
 	rm -rf bin/

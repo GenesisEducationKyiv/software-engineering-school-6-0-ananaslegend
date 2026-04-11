@@ -3,7 +3,12 @@ package scanner_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/mock/gomock"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/scanner"
@@ -11,7 +16,6 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 func newScanner(t *testing.T) (*scanner.Scanner, *mocks.MockRepository, *mocks.MockReleaseProvider) {
@@ -147,4 +151,38 @@ func TestScanner_NoRelease_BumpsCheckedAt(t *testing.T) {
 	require.Len(t, capturedResults, 1)
 	assert.Equal(t, int64(1), capturedResults[0].RepoID)
 	assert.True(t, capturedResults[0].BumpOnly)
+}
+
+func newScannerWithRegistry(t *testing.T) (*scanner.Scanner, *mocks.MockRepository, *mocks.MockReleaseProvider, *prometheus.Registry) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	gh := mocks.NewMockReleaseProvider(ctrl)
+	reg := prometheus.NewRegistry()
+	s := scanner.New(scanner.Config{Repo: repo, GitHub: gh, Registry: reg})
+	return s, repo, gh, reg
+}
+
+func TestScanner_Tick_IncrementsMetrics(t *testing.T) {
+	s, repo, gh, reg := newScannerWithRegistry(t)
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: nil}}
+	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(invokeRunInTx(repos))
+	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(map[int64]string{1: "v1.0.0"}, nil)
+
+	err := s.Tick(context.Background())
+	require.NoError(t, err)
+
+	expected := strings.NewReader(`
+		# HELP scanner_repos_scanned_total Total number of repositories processed by the scanner.
+		# TYPE scanner_repos_scanned_total counter
+		scanner_repos_scanned_total 1
+		# HELP scanner_ticks_total Total number of scanner ticks.
+		# TYPE scanner_ticks_total counter
+		scanner_ticks_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected,
+		"scanner_repos_scanned_total",
+		"scanner_ticks_total",
+	))
 }

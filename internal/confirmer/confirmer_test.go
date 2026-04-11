@@ -3,13 +3,17 @@ package confirmer_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/mock/gomock"
 
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 func newConfirmer(t *testing.T) (*confirmer.Confirmer, *mocks.MockRepository, *mocks.MockMailSender) {
@@ -92,5 +96,34 @@ func TestConfirmer_FlushMultiple_ProcessedInOrder(t *testing.T) {
 	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	c.Flush(context.Background())
+}
+
+func newConfirmerWithRegistry(t *testing.T) (*confirmer.Confirmer, *mocks.MockRepository, *mocks.MockMailSender, *prometheus.Registry) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	m := mocks.NewMockMailSender(ctrl)
+	reg := prometheus.NewRegistry()
+	c := confirmer.New(confirmer.Config{Repo: repo, Mailer: m, BaseURL: "http://localhost:8080", Registry: reg})
+	return c, repo, m, reg
+}
+
+func TestConfirmer_Flush_IncrementsEmailSentMetric(t *testing.T) {
+	c, repo, m, reg := newConfirmerWithRegistry(t)
+
+	gomock.InOrder(
+		repo.EXPECT().ProcessNext(gomock.Any(), gomock.Any()).DoAndReturn(invokeProcessNext(testPending, true)),
+		repo.EXPECT().ProcessNext(gomock.Any(), gomock.Any()).Return(false, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
+
+	c.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP confirmer_emails_sent_total Total number of confirmation emails attempted.
+		# TYPE confirmer_emails_sent_total counter
+		confirmer_emails_sent_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_emails_sent_total"))
 }
 

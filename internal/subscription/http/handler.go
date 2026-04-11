@@ -18,6 +18,7 @@ type SubscriptionService interface {
 	Subscribe(ctx context.Context, p domain.SubscribeParams) error
 	Confirm(ctx context.Context, token string) error
 	Unsubscribe(ctx context.Context, token string) error
+	ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error)
 }
 
 type Handler struct {
@@ -30,8 +31,21 @@ func NewHandler(svc SubscriptionService, writeError func(w http.ResponseWriter, 
 	return &Handler{svc: svc, writeError: writeError}
 }
 
+// Subscribe godoc
+//
+//	@Summary		Subscribe to a repository
+//	@Description	Subscribe to GitHub repository release notifications. A confirmation email will be sent.
+//	@Tags			subscriptions
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		SubscribeRequest	true	"Subscription request"
+//	@Success		202		{object}	StatusResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		409		{object}	ErrorResponse	"already subscribed"
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/api/subscribe [post]
 func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
-	var req subscribeRequest
+	var req SubscribeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeError(w, r, errBadRequest("invalid JSON body"))
 		return
@@ -50,9 +64,20 @@ func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, statusResponse{Status: "pending_confirmation"})
+	writeJSON(w, http.StatusAccepted, StatusResponse{Status: "pending_confirmation"})
 }
 
+// Confirm godoc
+//
+//	@Summary		Confirm subscription
+//	@Description	Confirms a subscription using the one-time token from the confirmation email (valid 24h).
+//	@Tags			subscriptions
+//	@Produce		html
+//	@Param			token	path	string	true	"Confirmation token"
+//	@Success		200
+//	@Failure		404	"token not found"
+//	@Failure		410	"token expired"
+//	@Router			/api/confirm/{token} [get]
 func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	if err := h.svc.Confirm(r.Context(), token); err != nil {
@@ -70,6 +95,16 @@ func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	h.pages.Confirmed(w)
 }
 
+// Unsubscribe godoc
+//
+//	@Summary		Unsubscribe
+//	@Description	Unsubscribes and permanently removes all subscription data (GDPR hard delete).
+//	@Tags			subscriptions
+//	@Produce		html
+//	@Param			token	path	string	true	"Unsubscribe token"
+//	@Success		200
+//	@Failure		404	"token not found"
+//	@Router			/api/unsubscribe/{token} [get]
 func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	if err := h.svc.Unsubscribe(r.Context(), token); err != nil {
@@ -85,12 +120,64 @@ func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	h.pages.Unsubscribed(w)
 }
 
+// Landing godoc
+//
+//	@Summary		Landing page
+//	@Description	Subscription form (HTML).
+//	@Tags			pages
+//	@Produce		html
+//	@Success		200
+//	@Router			/ [get]
 func (h *Handler) Landing(w http.ResponseWriter, r *http.Request) {
 	h.pages.Landing(w)
 }
 
+// Subscribed godoc
+//
+//	@Summary		Subscribed success page
+//	@Description	Shown after a successful subscription form submission (HTML).
+//	@Tags			pages
+//	@Produce		html
+//	@Success		200
+//	@Router			/subscribed [get]
 func (h *Handler) Subscribed(w http.ResponseWriter, r *http.Request) {
 	h.pages.Subscribed(w)
+}
+
+// ListByEmail godoc
+//
+//	@Summary		List active subscriptions
+//	@Description	Returns all confirmed subscriptions for a given email address.
+//	@Tags			subscriptions
+//	@Produce		json
+//	@Param			email	query		string				true	"Email address"	example:"user@example.com"
+//	@Success		200		{object}	SubscriptionsResponse
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		500		{object}	ErrorResponse
+//	@Router			/api/subscriptions [get]
+func (h *Handler) ListByEmail(w http.ResponseWriter, r *http.Request) {
+	email := r.URL.Query().Get("email")
+	if _, err := mail.ParseAddress(email); err != nil || email == "" {
+		h.writeError(w, r, errBadRequest("invalid email"))
+		return
+	}
+
+	subs, err := h.svc.ListByEmail(r.Context(), email)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg("list subscriptions")
+		h.writeError(w, r, err)
+		return
+	}
+
+	items := make([]SubscriptionItem, len(subs))
+	for i, s := range subs {
+		items[i] = SubscriptionItem{
+			Repository:  s.RepoOwner + "/" + s.RepoName,
+			ConfirmedAt: s.ConfirmedAt,
+			CreatedAt:   s.CreatedAt,
+		}
+	}
+	writeJSON(w, http.StatusOK, SubscriptionsResponse{Subscriptions: items})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

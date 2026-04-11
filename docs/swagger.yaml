@@ -1,0 +1,181 @@
+basePath: /
+definitions:
+  internal_subscription_http.ErrorResponse:
+    properties:
+      error:
+        example: invalid email
+        type: string
+    type: object
+  internal_subscription_http.StatusResponse:
+    properties:
+      status:
+        example: pending_confirmation
+        type: string
+    type: object
+  internal_subscription_http.SubscribeRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      repository:
+        example: ananaslegend/reposeetory
+        type: string
+    type: object
+  internal_subscription_http.SubscriptionItem:
+    properties:
+      confirmed_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      repository:
+        example: ananaslegend/reposeetory
+        type: string
+    type: object
+  internal_subscription_http.SubscriptionsResponse:
+    properties:
+      subscriptions:
+        items:
+          $ref: '#/definitions/internal_subscription_http.SubscriptionItem'
+        type: array
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: ananaslegend
+    url: https://github.com/ananaslegend/reposeetory
+  description: GitHub Release Notification API. Subscribe to repositories and get
+    email notifications on new releases.
+  license:
+    name: MIT
+  title: Reposeetory API
+  version: "1.0"
+paths:
+  /:
+    get:
+      description: Subscription form (HTML).
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+      summary: Landing page
+      tags:
+      - pages
+  /api/confirm/{token}:
+    get:
+      description: Confirms a subscription using the one-time token from the confirmation
+        email (valid 24h).
+      parameters:
+      - description: Confirmation token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: token not found
+        "410":
+          description: token expired
+      summary: Confirm subscription
+      tags:
+      - subscriptions
+  /api/subscribe:
+    post:
+      consumes:
+      - application/json
+      description: Subscribe to GitHub repository release notifications. A confirmation
+        email will be sent.
+      parameters:
+      - description: Subscription request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_subscription_http.SubscribeRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_subscription_http.StatusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+        "409":
+          description: already subscribed
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+      summary: Subscribe to a repository
+      tags:
+      - subscriptions
+  /api/subscriptions:
+    get:
+      description: Returns all confirmed subscriptions for a given email address.
+      parameters:
+      - description: Email address
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_subscription_http.SubscriptionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_subscription_http.ErrorResponse'
+      summary: List active subscriptions
+      tags:
+      - subscriptions
+  /api/unsubscribe/{token}:
+    get:
+      description: Unsubscribes and permanently removes all subscription data (GDPR
+        hard delete).
+      parameters:
+      - description: Unsubscribe token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: token not found
+      summary: Unsubscribe
+      tags:
+      - subscriptions
+  /subscribed:
+    get:
+      description: Shown after a successful subscription form submission (HTML).
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+      summary: Subscribed success page
+      tags:
+      - pages
+swagger: "2.0"
