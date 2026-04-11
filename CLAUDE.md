@@ -48,6 +48,10 @@ internal/
     domain/                              # моделі, помилки, токени — нуль залежностей від проекту
     http/                                # HTTP handlers (package http, аліас subhttp при імпорті)
       pages/                             # HTML-сторінки для браузерних GET-ендпоінтів
+        templates/
+          base.html                      # dark hero base (для confirmed/unsubscribed/unavailable/oops)
+          landing.html                   # standalone: GET / — форма підписки
+          subscribed.html                # standalone: GET /subscribed — success page
     service/                             # бізнес-логіка; тут живуть інтерфейси Repository/MailSender/RemoteRepositoryProvider
     repository/                          # pgx-реалізація персистенсу
 migrations/
@@ -105,13 +109,40 @@ go generate ./internal/subscription/service/...
 subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 ```
 
+### Візуальна айдентика (dark hero)
+
+Всі HTML-сторінки і email-шаблони дотримуються єдиного dark hero стилю:
+
+| Токен | Значення | Використання |
+|---|---|---|
+| Background | `#0f172a` | Фон всіх сторінок і листів |
+| Surface | `#1e293b` | Input поля, chips |
+| Border | `#334155` | Межі input, subtle dividers |
+| Text primary | `#ffffff` | Заголовки |
+| Text secondary | `#94a3b8` | Підзаголовки, описи |
+| Accent blue | `#60a5fa` | "see" у wordmark, посилання |
+| CTA blue | `#2563eb` | Основна кнопка |
+
+**Wordmark:** `reposeetory` — літери `see` виділені кольором `#60a5fa` з dotted underline (`text-decoration-style: dotted`, `text-underline-offset: 5px`, `thickness: 2px`).
+
+**Слоган:** `Don't monitor GitHub. Just see the updates.`
+
+**Footer** на кожній сторінці: wordmark + іконка GitHub + посилання `ananaslegend/reposeetory`.
+
+**Правило:** будь-яка нова сторінка — темний фон, без білих карток, без роздільних ліній між секціями, без зовнішніх CSS-залежностей.
+
 ### HTML-сторінки для браузерних ендпоінтів
-`GET /api/confirm/{token}` і `GET /api/unsubscribe/{token}` повертають HTML, не JSON.
 Рендерер — `internal/subscription/http/pages` (пакет `pages`), `Renderer{}` zero-value usable.
 Шаблони вбудовані через `//go:embed templates/*`, парсяться при ініціалізації пакету.
 
+Нові standalone шаблони (`landing.html`, `subscribed.html`) НЕ використовують `base.html` — парсяться як `template.ParseFS(templateFS, "templates/landing.html")` і виконуються через `.Execute`, не `.ExecuteTemplate`.
+
+Шаблони на основі `base.html` (confirmed, unsubscribed, unavailable, oops) парсяться разом з ним і виконуються через `.ExecuteTemplate(w, "base", data)`.
+
 | Метод | Тригер | HTTP статус |
 |---|---|---|
+| `Landing(w)` | `GET /` | 200 |
+| `Subscribed(w)` | `GET /subscribed` | 200 |
 | `Confirmed(w)` | успішний confirm | 200 |
 | `Unsubscribed(w)` | успішний unsubscribe | 200 |
 | `Unavailable(w, status)` | `ErrTokenNotFound` або `ErrTokenExpired` | 404 / 410 |
@@ -132,6 +163,9 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 - `Notifier.Flush(ctx)` — цикл: `ProcessNext` → один pending запис FOR UPDATE SKIP LOCKED → надсилає email → `sent_at = NOW()` → commit
 - Один запис за транзакцію (без батч-обробки — trade-off не вартий)
 - На помилці mailer → rollback, логує, повертає (retry на наступному тіку)
+- `Config.BaseURL` (`APP_BASE_URL`) — використовується для побудови `UnsubscribeURL` у release email
+- `PendingNotification` містить `UnsubscribeToken` (вибирається з `s.unsubscribe_token` в SQL)
+- `domain.SendReleaseParams` містить `UnsubscribeURL` — передається в email шаблон
 
 **Outbox таблиця** `release_notifications`:
 ```sql
@@ -156,6 +190,8 @@ TLS-політика конфігурується через `SMTP_TLS_POLICY`: 
 
 | Метод | Шлях | Опис |
 |---|---|---|
+| GET | `/` | Landing page (форма підписки) |
+| GET | `/subscribed` | Success page ("Check your inbox") |
 | POST | `/api/subscribe` | Підписатись; повертає 202 + надсилає email-підтвердження |
 | GET | `/api/confirm/{token}` | Підтвердити підписку (токен одноразовий, TTL 24h) |
 | GET | `/api/unsubscribe/{token}` | Відписатись (hard delete, GDPR) |
