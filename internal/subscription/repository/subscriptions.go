@@ -13,8 +13,14 @@ import (
 const uniqueViolationCode = "23505"
 
 func (r *Repository) CreateSubscription(ctx context.Context, p domain.CreateSubscriptionParams) (*domain.Subscription, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("create subscription: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var sub domain.Subscription
-	err := r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO subscriptions
 			(email, repository_id, confirm_token, confirm_token_expires_at, unsubscribe_token)
 		VALUES ($1, $2, $3, $4, $5)
@@ -31,6 +37,17 @@ func (r *Repository) CreateSubscription(ctx context.Context, p domain.CreateSubs
 		}
 		return nil, fmt.Errorf("create subscription: %w", err)
 	}
+
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO confirmation_notifications (subscription_id) VALUES ($1)
+	`, sub.ID); err != nil {
+		return nil, fmt.Errorf("create subscription: queue confirmation: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("create subscription: commit: %w", err)
+	}
+
 	return &sub, nil
 }
 
