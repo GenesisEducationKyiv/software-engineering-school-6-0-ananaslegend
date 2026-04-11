@@ -383,10 +383,55 @@ Unit-тести на service layer з mock-залежностями (`uber-go/mo
 go test ./internal/subscription/service/...
 ```
 
+### Prometheus metrics
+
+`internal/storage/postgres/collector.go` — `PoolCollector` реалізує `prometheus.Collector` поверх `pgxpool.Stat()`.
+
+Єдиний `*prometheus.Registry` створюється в `main.go` і передається через `Config`-структури в усі компоненти. Nil-safe патерн: якщо `Registry == nil` — метрика створюється, але не реєструється (існуючі тести не ламаються).
+
+```go
+// main.go
+reg := prometheus.NewRegistry()
+reg.MustRegister(
+    prometheus.NewGoCollector(),
+    prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+    postgres.NewPoolCollector(pool),
+)
+// далі Registry: reg передається в scanner.Config, notifier.Config, confirmer.Config, service.Config, RouterConfig
+```
+
+**Метрики по компонентах:**
+
+| Компонент | Метрика | Тип | Labels |
+|---|---|---|---|
+| HTTP | `http_requests_total` | counter | `method`, `path`, `status` |
+| HTTP | `http_request_duration_seconds` | histogram | `method`, `path` |
+| Scanner | `scanner_ticks_total` | counter | `result` |
+| Scanner | `scanner_repos_scanned_total` | counter | — |
+| Notifier | `notifier_emails_sent_total` | counter | `result` |
+| Notifier | `notifier_flush_duration_seconds` | histogram | — |
+| Confirmer | `confirmer_emails_sent_total` | counter | `result` |
+| GitHub cache | `github_cache_hits_total` | counter | — |
+| GitHub cache | `github_cache_misses_total` | counter | — |
+| GitHub cache | `github_cache_errors_total` | counter | — |
+| Service | `subscriptions_created_total` | counter | — |
+| Service | `subscriptions_confirmed_total` | counter | — |
+| Service | `subscriptions_deleted_total` | counter | — |
+| DB pool | `db_pool_acquired_conns` | gauge | — |
+| DB pool | `db_pool_idle_conns` | gauge | — |
+| DB pool | `db_pool_total_conns` | gauge | — |
+
+**HTTP middleware** (`internal/httpapi/metrics.go`): `/metrics` шлях не трекається; chi route pattern (`chi.RouteContext(r.Context()).RoutePattern()`) використовується для `path` label — низька кардинальність.
+
+**Ендпоінт:** `GET /metrics` — `promhttp.HandlerFor(reg, promhttp.HandlerOpts{})`, підключено в `RouterConfig`.
+
+**Тести:** `testutil.GatherAndCompare` з `prometheus/testutil` — у `scanner_test.go`, `notifier_test.go`, `confirmer_test.go`, `service_test.go`, `caching_client_test.go`.
+
+**Пакет `collectors`** не вендорується окремо — `NewGoCollector` і `NewProcessCollector` беруться напряму з пакету `prometheus` (deprecated warning, але функціонально коректно).
+
 ## Поза обсягом (майбутні таски)
 
 - `GET /api/subscriptions?email=` — список підписок
 - CI (GitHub Actions)
-- Prometheus metrics
 - Rate limiting на `/subscribe`
 - API key auth
