@@ -32,7 +32,8 @@ New type `CachingReleaseProvider` with fields:
 - `wrapped releaseProvider` — unexported interface (`GetLatestReleases` only), satisfied by `*Client`
 - `rdb *redis.Client`
 - `ttl time.Duration`
-- `log zerolog.Logger`
+
+Logger via `zerolog.Ctx(ctx)` per project convention — no stored logger field.
 
 Constructor: `NewCachingClient(wrapped releaseProvider, rdb *redis.Client, ttl time.Duration) *CachingReleaseProvider`
 
