@@ -82,7 +82,7 @@ func TestRenderer_Landing(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "reposeetory") {
 		t.Error("body: expected 'reposeetory'")
 	}
-	if !strings.Contains(w.Body.String(), "Watch repository") {
+	if !strings.Contains(w.Body.String(), "Subscribe repository") {
 		t.Error("body: expected 'Watch repository'")
 	}
 }

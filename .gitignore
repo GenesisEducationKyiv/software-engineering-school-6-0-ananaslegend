@@ -5,4 +5,5 @@ bin/
 *.out
 .idea
 .superpowers
-api.worktrees/
+api
+.worktrees/
