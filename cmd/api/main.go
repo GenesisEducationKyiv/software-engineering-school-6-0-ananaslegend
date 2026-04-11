@@ -102,9 +102,12 @@ func main() {
 		if err != nil {
 			log.Warn().Err(err).Msg("redis unavailable, github caching disabled")
 		} else {
+			defer rdb.Close()
 			releaseProvider = githubclient.NewCachingClient(githubClient, rdb, 10*time.Minute)
 			log.Info().Msg("github release cache: redis")
 		}
+	} else {
+		log.Info().Msg("github release cache: disabled")
 	}
 
 	scan := scanner.New(scanner.Config{
