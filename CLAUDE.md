@@ -234,6 +234,75 @@ type fullMailer interface {
 TLS-політика конфігурується через `SMTP_TLS_POLICY`: `starttls` (default) → `TLSOpportunistic`, `ssl` → `TLSMandatory`, `none` → `NoTLS`.
 Якщо `SMTP_HOST` порожній — `main.go` використовує `StubMailer`.
 
+### Swagger документація
+
+Використовуємо `swaggo/swag` для генерації OpenAPI 2.0 специфікації.
+
+**Інструменти:**
+| Пакет | Роль |
+|---|---|
+| `github.com/swaggo/swag` | CLI + анотації для генерації |
+| `github.com/swaggo/http-swagger/v2` | Middleware для Swagger UI (`GET /swagger/*`) |
+| `docs/` | Згенерований пакет — **не редагувати вручну** |
+
+**Загальні анотації** — у `cmd/api/main.go` (рядок 1, `//go:generate`):
+```go
+//go:generate swag init -g cmd/api/main.go -o docs --parseDependency
+
+// @title        Reposeetory API
+// @version      1.0
+// @description  GitHub Release Notification API.
+// @host         reposeetory.com
+// @BasePath     /
+```
+
+**Анотації хендлерів** — безпосередньо перед методом, у файлі хендлера (`internal/<feature>/http/handler.go`):
+```go
+// Subscribe godoc
+//
+//	@Summary     Subscribe to a repository
+//	@Description Subscribe to GitHub repository release notifications.
+//	@Tags        subscriptions
+//	@Accept      json
+//	@Produce     json
+//	@Param       body  body      SubscribeRequest  true  "Subscription request"
+//	@Success     202   {object}  StatusResponse
+//	@Failure     400   {object}  ErrorResponse
+//	@Router      /api/subscribe [post]
+func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
+```
+
+**DTO** — у `internal/<feature>/http/dto.go`; теги `example:` обов'язкові для полів запиту/відповіді:
+```go
+type SubscribeRequest struct {
+    Email      string `json:"email"      example:"user@example.com"`
+    Repository string `json:"repository" example:"ananaslegend/reposeetory"`
+}
+```
+
+**Генерація:**
+```sh
+make swagger   # swag init -g cmd/api/main.go -o docs --parseDependency
+# або
+go generate ./cmd/api/...
+```
+
+**Підключення UI** — в `internal/httpapi/router.go`:
+```go
+import (
+    _ "github.com/ananaslegend/reposeetory/docs"   // side-effect: реєструє специфікацію
+    httpswagger "github.com/swaggo/http-swagger/v2"
+)
+
+r.Get("/swagger/*", httpswagger.Handler())
+```
+
+**Правила:**
+- `docs/` — лише згенерований код, не редагувати вручну; додано в git.
+- Після зміни будь-якого хендлера або DTO — перегенерувати: `make swagger`.
+- Для HTML-ендпоінтів (`GET /`, confirm, unsubscribe): `@Produce html`, без `{object}` у `@Success`.
+- Теги (`@Tags`) групують ендпоінти в UI: `pages` для браузерних сторінок, `subscriptions` для API.
+
 ### Docker / локальне оточення
 `make docker-up` піднімає повний стек: postgres → migrate → api + mailpit (:8025) + redis (:6379).
 Залежності вендоруються (`go mod vendor`) і білд у Docker використовує `-mod=vendor` — обхід корпоративного SSL-проксі, який перехоплює TLS всередині контейнера.

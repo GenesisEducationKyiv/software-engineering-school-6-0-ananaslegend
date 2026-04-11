@@ -106,3 +106,5 @@ push і PR. Bonus: build Docker image.
 ## Обробка HTTP помилок у відповіді
 
 ## Перевірити gracuful shutdown для всіх воркерів (Scanner, Notifier, Confirmer) 
+
+## Додати ручку GET /api/subscriptions?email={email} - Get all active subscriptions for a given email
