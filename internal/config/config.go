@@ -34,8 +34,8 @@ type Config struct {
 
 	GitHubToken string `envconfig:"GITHUB_TOKEN"`
 
-	ScannerInterval  time.Duration `envconfig:"SCANNER_INTERVAL" default:"5m"`
-	NotifierInterval time.Duration `envconfig:"NOTIFIER_INTERVAL" default:"30s"`
+	ScannerInterval   time.Duration `envconfig:"SCANNER_INTERVAL" default:"5m"`
+	NotifierInterval  time.Duration `envconfig:"NOTIFIER_INTERVAL" default:"30s"`
 	ConfirmerInterval time.Duration `envconfig:"CONFIRMER_INTERVAL" default:"30s"`
 }
 
