@@ -38,6 +38,11 @@ internal/
     mocks/                               # mockgen
     repository/db.go                     # pgx: ProcessNext (один запис за транзакцію)
     emailer/                             # SMTPMailer + StubMailer (перенесено з mailer/)
+  confirmer/                             # feature-модуль: розсилка confirm emails із outbox
+    confirmer.go                         # Confirmer.Run/Flush; інтерфейси Repository, MailSender
+    confirmer_test.go
+    mocks/                               # mockgen
+    repository/db.go                     # pgx: ProcessNext (один запис за транзакцію)
   mailer/
     stub.go                              # StubMailer (використовується якщо SMTP_HOST не задано)
     smtp.go                              # SMTPMailer (go-mail; активується через SMTP_HOST env)
@@ -57,6 +62,7 @@ internal/
 migrations/
   000001_...                             # subscriptions, repositories
   000002_release_notifications.up.sql   # outbox-таблиця release_notifications
+  000003_confirmation_notifications.up.sql # outbox-таблиця confirmation_notifications
 Dockerfile                               # multi-stage: golang:1.26-alpine → alpine:3.21; -mod=vendor
 docker-compose.yml                       # postgres, mailpit, migrate, api
 ```
@@ -67,9 +73,11 @@ docker-compose.yml                       # postgres, mailpit, migrate, api
 
 ### Інтерфейси по місцю використання
 Інтерфейси визначаються в пакеті-споживачі, не в пакеті-продюсері.
-- `service.Repository`, `service.RemoteRepositoryProvider`, `service.MailSender` — у `internal/subscription/service/service.go`
+- `service.Repository`, `service.RemoteRepositoryProvider` — у `internal/subscription/service/service.go`
 - `http.SubscriptionService` — у `internal/subscription/http/handler.go`
-- Пакети `github/` і `mailer/` містять тільки конкретні реалізації (stubs зараз), без інтерфейсів.
+- `notifier.Repository`, `notifier.MailSender` — у `internal/notifier/notifier.go`
+- `confirmer.Repository`, `confirmer.MailSender` — у `internal/confirmer/confirmer.go`
+- Пакети `github/` і `notifier/emailer/` містять тільки конкретні реалізації, без інтерфейсів.
 
 ### Param objects
 Будь-яка exported функція, що викликається з іншого пакету і приймає більше 2 параметрів, замість цього приймає один struct.
@@ -167,13 +175,39 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 - `PendingNotification` містить `UnsubscribeToken` (вибирається з `s.unsubscribe_token` в SQL)
 - `domain.SendReleaseParams` містить `UnsubscribeURL` — передається в email шаблон
 
+**Confirmer** (`internal/confirmer/`) дренує outbox `confirmation_notifications`:
+- Ідентичний патерн до Notifier: `Confirmer.Flush(ctx)` → `ProcessNext` → FOR UPDATE SKIP LOCKED → `SendConfirmation` → `sent_at = NOW()` → commit
+- `Subscribe()` більше не надсилає email синхронно — `CreateSubscription` вставляє рядок у `confirmation_notifications` в одній транзакції зі subscription row
+- SQL фільтрує `WHERE s.confirm_token IS NOT NULL` — якщо підписка вже підтверджена (токен анульований), рядок пропускається
+- `Config.BaseURL` → будує `ConfirmURL = baseURL + "/api/confirm/" + confirm_token`
+- `PendingConfirmation` містить ID, Email, ConfirmToken, RepoOwner, RepoName
+
 **Outbox таблиця** `release_notifications`:
 ```sql
 id BIGSERIAL, subscription_id, repository_id, release_tag TEXT, created_at TIMESTAMPTZ, sent_at TIMESTAMPTZ
 -- partial index: WHERE sent_at IS NULL
 ```
 
+**Outbox таблиця** `confirmation_notifications`:
+```sql
+id BIGSERIAL, subscription_id REFERENCES subscriptions ON DELETE CASCADE, created_at TIMESTAMPTZ, sent_at TIMESTAMPTZ
+-- partial index: WHERE sent_at IS NULL
+```
+
 **Транзакції через context:** `context.WithValue(ctx, txKey{}, tx)` — пакет репозиторію перевіряє контекст і використовує tx замість pool. `txKey{}` — приватний struct-тип, щоб уникнути конфліктів.
+
+### Subscription service — без MailSender
+`internal/subscription/service/service.go` не має `MailSender` інтерфейсу і не надсилає email. Підтвердження тепер повністю асинхронне через outbox. Сервіс відповідає лише за валідацію, upsert репозиторію і `CreateSubscription` (яка атомарно створює і subscription, і confirmation outbox row).
+
+### main.go — fullMailer
+У `cmd/api/main.go` оголошений локальний unexported інтерфейс:
+```go
+type fullMailer interface {
+    notifier.MailSender
+    confirmer.MailSender
+}
+```
+Змінна `mailSender fullMailer` передається і в `notifier.Config`, і в `confirmer.Config`. Конкретні реалізації (SMTPMailer, ResendMailer, StubMailer) реалізують обидва методи.
 
 ### SMTP Mailer
 `internal/mailer/smtp.go` — `SMTPMailer`, використовує `github.com/wneessen/go-mail`.
@@ -228,6 +262,7 @@ TLS-політика конфігурується через `SMTP_TLS_POLICY`: 
 | `GITHUB_TOKEN` | `` | **Обов'язковий для сканера** — GraphQL API повертає 403 без токена; якщо порожній — сканер не запускається (лог `WARN`) |
 | `SCANNER_INTERVAL` | `5m` | Інтервал між тіками сканера |
 | `NOTIFIER_INTERVAL` | `30s` | Інтервал між тіками нотифікатора |
+| `CONFIRMER_INTERVAL` | `30s` | Інтервал між тіками confirmer'а |
 
 Скопіювати `.env.example` → `.env` перед першим запуском.
 
