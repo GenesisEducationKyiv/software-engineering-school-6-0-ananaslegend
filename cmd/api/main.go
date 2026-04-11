@@ -50,7 +50,7 @@ func main() {
 		Pretty: cfg.LogPretty,
 	})
 
-	log.Info().Str("scanner_interval", cfg.ScannerInterval.String()).Str("notifier_interval", cfg.NotifierInterval.String()).Send()
+	log.Debug().Str("scanner_interval", cfg.ScannerInterval.String()).Str("notifier_interval", cfg.NotifierInterval.String()).Str("confirm_interval", cfg.ConfirmerInterval.String()).Send()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
