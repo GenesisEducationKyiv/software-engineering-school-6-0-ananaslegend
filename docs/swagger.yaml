@@ -40,7 +40,7 @@ definitions:
           $ref: '#/definitions/internal_subscription_http.SubscriptionItem'
         type: array
     type: object
-host: localhost:8080
+host: reposeetory.com
 info:
   contact:
     name: ananaslegend
