@@ -1,4 +1,4 @@
-package redis
+package app
 
 import (
 	"context"
@@ -11,15 +11,17 @@ type Config struct {
 	URL string
 }
 
-func NewClient(cfg Config) (*goredis.Client, error) {
-	opts, err := goredis.ParseURL(cfg.URL)
+func NewRedisClient(url string) (*goredis.Client, error) {
+	opts, err := goredis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse redis url: %w", err)
 	}
+
 	rdb := goredis.NewClient(opts)
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
+	if err = rdb.Ping(context.Background()).Err(); err != nil {
 		_ = rdb.Close()
 		return nil, fmt.Errorf("ping redis: %w", err)
 	}
+
 	return rdb, nil
 }

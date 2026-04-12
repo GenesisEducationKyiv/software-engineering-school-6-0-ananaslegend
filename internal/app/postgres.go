@@ -1,9 +1,32 @@
-package postgres
+package app
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/ananaslegend/reposeetory/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+func newPostgresDatabase(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse db config: %w", err)
+	}
+	poolCfg.MaxConns = cfg.DBMaxConns
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create pool: %w", err)
+	}
+
+	if err = pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping db: %w", err)
+	}
+	return pool, nil
+}
 
 // PoolCollector is a prometheus.Collector that exposes pgxpool.Stat metrics.
 type PoolCollector struct {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.uber.org/mock/gomock"
@@ -14,7 +15,6 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/scanner"
 	"github.com/ananaslegend/reposeetory/internal/scanner/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	txmocks "github.com/ananaslegend/reposeetory/internal/transactor/mocks"
 	"github.com/stretchr/testify/require"
 )
 

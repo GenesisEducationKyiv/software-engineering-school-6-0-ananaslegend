@@ -1,4 +1,4 @@
-package logger
+package app
 
 import (
 	"os"
@@ -6,12 +6,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type Config struct {
+type LoggerConfig struct {
 	Level  string
 	Pretty bool
 }
 
-func New(cfg Config) zerolog.Logger {
+func New(cfg LoggerConfig) zerolog.Logger {
 	var l zerolog.Logger
 	if cfg.Pretty {
 		l = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()

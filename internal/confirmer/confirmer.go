@@ -6,11 +6,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/ananaslegend/reposeetory/internal/transactor"
 )
 
 // PendingConfirmation is one outbox row joined with subscription + repository data.

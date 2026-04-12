@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/ananaslegend/reposeetory/internal/transactor"
 )
 
 // Repository is the storage contract for the scanner.

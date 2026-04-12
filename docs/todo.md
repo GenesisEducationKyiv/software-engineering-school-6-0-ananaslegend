@@ -1,8 +1,5 @@
 # TODO / Backlog
 
-Реєстр ідей, оптимізацій і extras, які ми свідомо відклали поза обсяг першого
-етапу (схема БД і міграції). Це не roadmap — просто щоб не забути.
-
 ## Redis-кеш для confirm-токенів
 Винести `confirm_token` + `confirm_token_expires_at` з PG у Redis. Нативний TTL
 через `SET key value EX 86400`, одноразове використання через `GETDEL`.
@@ -16,7 +13,7 @@ Trade-off проти поточного рішення: durability (Redis in-mem
 ## Перенести конфіми в окрему таблицю
 
 ## Cron cleanup непідтверджених підписок
-Раз на N годин (типово 1h):
+Раз на N годин:
 ```sql
 DELETE FROM subscriptions
 WHERE confirmed_at IS NULL
@@ -27,4 +24,4 @@ WHERE confirmed_at IS NULL
 Альтернатива/доповнення до REST. `.proto` з тими ж операціями, що й REST API.
 Один сервіс піднімає обидва транспорти.
 
-## Refactor code 
+## Refactor code

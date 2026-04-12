@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
-	"github.com/ananaslegend/reposeetory/internal/transactor"
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
