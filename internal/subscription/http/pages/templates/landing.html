@@ -20,7 +20,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 64px 24px 48px;
+      padding: 64px 24px 40px;
       text-align: center;
       gap: 20px;
     }
@@ -135,6 +135,23 @@
       text-decoration: none;
     }
     .footer-link:hover { color: #64748b; }
+    .bmc-wrap { display: flex; justify-content: center; padding: 0 24px 56px; }
+    .bmc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #94a3b8;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 24px;
+      padding: 12px 28px;
+      text-decoration: none;
+      font-family: inherit;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .bmc-btn:hover { border-color: #60a5fa; color: #e2e8f0; }
   </style>
 </head>
 <body>
@@ -154,6 +171,12 @@
       <span class="chip">vercel/next.js</span>
     </div>
   </section>
+
+  <div class="bmc-wrap">
+    <a class="bmc-btn" href="https://destream.net/live/ananaslegend/donate" target="_blank" rel="noopener">
+      ♥ Support Me
+    </a>
+  </div>
 
   <section class="how">
     <p class="how-label">How it works</p>
