@@ -23,6 +23,7 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 	graphqlURL string
+	restURL    string
 }
 
 // NewClient returns a Client targeting the real GitHub API.
@@ -32,6 +33,7 @@ func NewClient(token string) *Client {
 		token:      token,
 		httpClient: &http.Client{},
 		graphqlURL: "https://api.github.com/graphql",
+		restURL:    "https://api.github.com",
 	}
 }
 
@@ -83,6 +85,34 @@ func (c *Client) GetLatestReleases(ctx context.Context, p GetLatestReleasesParam
 		}
 	}
 	return tags, nil
+}
+
+// RepoExists checks whether the given GitHub repository is accessible via REST HEAD.
+// Returns false (no error) for 404; returns an error for unexpected status codes.
+func (c *Client) RepoExists(ctx context.Context, p domain.RepoExistsParams) (bool, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s", c.restURL, p.Owner, p.Name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("build github rest request: %w", err)
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("github rest request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("github rest: unexpected status %d", resp.StatusCode)
+	}
 }
 
 // buildGraphQLQuery builds a batched GraphQL query aliasing each repo as r{id}.

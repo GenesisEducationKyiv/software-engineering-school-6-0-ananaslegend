@@ -23,6 +23,63 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) *Client {
 	}
 }
 
+func newTestClientREST(t *testing.T, handler http.HandlerFunc) *Client {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return &Client{
+		token:      "",
+		httpClient: srv.Client(),
+		graphqlURL: "http://unused",
+		restURL:    srv.URL,
+	}
+}
+
+func TestRepoExists_Exists(t *testing.T) {
+	c := newTestClientREST(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodHead, r.Method)
+		assert.Equal(t, "/repos/golang/go", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	exists, err := c.RepoExists(context.Background(), domain.RepoExistsParams{Owner: "golang", Name: "go"})
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestRepoExists_NotFound(t *testing.T) {
+	c := newTestClientREST(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodHead, r.Method)
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	exists, err := c.RepoExists(context.Background(), domain.RepoExistsParams{Owner: "foo", Name: "missing"})
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestRepoExists_ServerError(t *testing.T) {
+	c := newTestClientREST(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	_, err := c.RepoExists(context.Background(), domain.RepoExistsParams{Owner: "foo", Name: "bar"})
+	require.Error(t, err)
+}
+
+func TestRepoExists_BearerTokenSent(t *testing.T) {
+	var gotAuth string
+	c := newTestClientREST(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	})
+	c.token = "mytoken"
+
+	_, err := c.RepoExists(context.Background(), domain.RepoExistsParams{Owner: "foo", Name: "bar"})
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer mytoken", gotAuth)
+}
+
 func TestGetLatestReleases_EmptyInput(t *testing.T) {
 	c := &Client{httpClient: &http.Client{}, graphqlURL: "http://unused"}
 	result, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{})

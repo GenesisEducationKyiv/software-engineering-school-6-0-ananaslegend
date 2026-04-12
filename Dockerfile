@@ -10,6 +10,7 @@ COPY migrations/ migrations/
 COPY cmd/ cmd/
 COPY internal/ internal/
 COPY docs/ docs/
+COPY pkg/ pkg/
 
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /api ./cmd/api
 

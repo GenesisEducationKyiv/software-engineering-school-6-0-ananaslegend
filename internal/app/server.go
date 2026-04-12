@@ -18,7 +18,7 @@ import (
 func newHTTPServer(cfg config.Config, pool *pgxpool.Pool, log zerolog.Logger, reg *prometheus.Registry) *http.Server {
 	svc := service.New(service.Config{
 		Repo:            repository.New(pool),
-		GitHub:          githubclient.NewStubClient(),
+		GitHub:          githubclient.NewClient(cfg.GitHubToken),
 		AppBaseURL:      cfg.AppBaseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
 		Registry:        reg,
