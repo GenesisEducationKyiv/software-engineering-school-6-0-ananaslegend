@@ -1,4 +1,32 @@
+# Build output
 bin/
+api
+
+# Secrets & environment
 .env
+.env.*
+!.env.example
+
+# VCS
 .git/
+.gitignore
+
+# Editor & OS
 .idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed at build time)
+CLAUDE.md
+Makefile
+docs/superpowers/
+docs/spec.md
+docs/todo.md
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
