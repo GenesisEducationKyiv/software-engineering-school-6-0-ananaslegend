@@ -9,7 +9,7 @@
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #0f172a;
-      min-height: 100vh;
+      min-height: 100dvh;
       color: #fff;
       display: flex;
       flex-direction: column;
@@ -24,7 +24,7 @@
       text-align: center;
       gap: 16px;
     }
-    .icon { font-size: 52px; margin-bottom: 8px; }
+    .icon { margin-bottom: 8px; }
     h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
     p { font-size: 14px; color: #94a3b8; line-height: 1.6; max-width: 300px; }
     .back {
@@ -38,8 +38,13 @@
       border: 1px solid #1e293b;
       border-radius: 8px;
       padding: 9px 20px;
+      transition: border-color 0.15s, color 0.15s;
     }
-    .back:hover { border-color: #334155; }
+    .back:hover { border-color: #334155; color: #93c5fd; }
+    .back:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.5);
+      outline-offset: 2px;
+    }
     footer {
       padding: 18px 24px;
       display: flex;
@@ -47,7 +52,7 @@
       justify-content: space-between;
     }
     .footer-logo { font-size: 13px; font-weight: 700; color: #334155; }
-    .footer-logo .see { color: #1d4ed8; }
+    .footer-logo .see { color: #60a5fa; }
     .footer-link {
       display: flex;
       align-items: center;
@@ -55,13 +60,24 @@
       font-size: 12px;
       color: #475569;
       text-decoration: none;
+      transition: color 0.15s;
     }
     .footer-link:hover { color: #64748b; }
+    .footer-link:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.5);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .back, .footer-link { transition: none; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <div class="icon">📬</div>
+    <div class="icon">
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="52" height="52" viewBox="0 0 128 128" aria-hidden="true"><rect x="63.14" y="84.17" style="fill:#C87D5E;" width="18.31" height="39.83"/><path style="fill:#874D36;" d="M81.45,94.23c-1.64-2.66-3.81-4.93-6.55-6.41c-1.7-0.92-3.58-1.45-5.49-1.64h-3.19c-1.04,0.1-2.08,0.3-3.08,0.6v20.13c0.89-1.36,2.37-2.34,3.97-2.72c2.79-0.65,5.75,0.42,8.01,2.17c2.26,1.75,3.95,4.13,5.6,6.46c0.25,0.35,0.49,0.69,0.74,1.04V94.23z"/><path style="fill:#4E342E;" d="M28.94,28.97c11.86,0,21.51,8.02,21.51,17.89v47.6H7.42v-47.6C7.42,36.99,17.07,28.97,28.94,28.97"/><path style="fill:#FFFFFF;" d="M54.97,94.19H19.13c-2.13,0-3.93-1.57-4.22-3.68L9.87,53.88c-0.24-1.75,1.12-3.31,2.89-3.31h42.21V94.19z"/><path style="fill:#1976D2;" d="M97.55,25.09H28.94c0,0,23.58,2.89,23.58,22.78l0.12,50.48h66.52c2.67,0,4.83-2.16,4.83-4.83V51.54C124,36.93,112.16,25.09,97.55,25.09z"/><path style="fill:#0D47A1;" d="M83.47,34.01l-8.14,0.28L63.48,52.47c0,0,0-9.63,0-14.75c0-7.88-8-12.64-8-12.64h31.16l0.16,0.16C90.07,28.35,87.98,33.85,83.47,34.01z"/><ellipse style="fill:#0D47A1;" cx="74.21" cy="54.06" rx="8.14" ry="9.16"/><path style="fill:#C62828;" d="M66.89,10.11l0.03,41.56c0,1.4,1.13,2.53,2.53,2.53h5.11c1.4,0,2.53-1.13,2.53-2.53V4l-4.1,0C69.62,4,66.89,6.73,66.89,10.11z"/><path style="fill:#F44336;" d="M69.12,10.11l0.03,41.56h8.17V19.49h14.08c3.25,0,3.63-1.41,3.63-7.55S94.66,4,91.41,4H75.22C71.85,4,69.12,6.73,69.12,10.11z"/><path style="fill:#FF7555;" d="M74.39,10.88c-0.07,1.99-1.37,20.01-1.6,23.39c-0.28,4.09-2.64,4.51-2.64,0.79V10.7C70.16,6.76,74.54,6.55,74.39,10.88z"/><path style="fill:#82AEC0;" d="M73.4,42.44l0.07,18.31c0,0-1.95,0-4.14,0c-4.05,0-7.33-4.1-7.33-9.16s3.28-9.16,7.33-9.16S73.4,42.44,73.4,42.44z"/><ellipse style="fill:#E0E0E0;" cx="73.4" cy="51.59" rx="7.33" ry="9.16"/><path style="fill:#FFFFFF;" d="M69.02,51.86c0.44,0.22,0.97-0.02,1.35-0.34c1.16-0.97,1.6-2.57,2.67-3.63c0.94-0.94,2.37-1.86,1.25-3.25c-0.81-1-2.18-0.83-3.25-0.37C68.67,45.26,66.79,50.74,69.02,51.86z"/><path style="fill:#4FC3F7;" d="M28.94,29.23c11.77,0,21.35,7.96,21.35,17.75V94.2H7.59V46.97C7.59,37.19,17.17,29.23,28.94,29.23 M28.94,25.09L28.94,25.09C13.81,25.09,4,35.28,4,47.86v48.35c0,1.17,0.95,2.13,2.13,2.13h48.09c1.17,0,2.13-0.95,2.13-2.13V47.86C56.33,35.28,44.07,25.09,28.94,25.09L28.94,25.09z"/><path style="fill:#6FBFF0;stroke:#6FBFF0;stroke-miterlimit:10;" d="M17.68,91.5c-0.59-0.31-0.1-0.9,0.23-1.44l13.37-23.29l2.63,1.6L19.03,90.75C18.65,91.33,18.27,91.81,17.68,91.5z"/><path style="fill:#6FBFF0;stroke:#6FBFF0;stroke-miterlimit:10;" d="M39.89,74.93l-27.74-21.3c-0.34-0.23-0.63-0.65-0.28-1.07c0.28-0.34,0.54-0.16,1.03,0.13l26.88,18.52c0.68,0.42,1.56,0.24,2.03-0.4l8.02-10.86l-0.02,4.87l-6.76,9.54C42.31,75.37,40.92,75.62,39.89,74.93z"/></svg>
+    </div>
     <h1>Check your inbox</h1>
     <p>We sent a confirmation email. Click the link to activate your subscription.</p>
     <a class="back" href="/">&#8592; Subscribe more</a>
@@ -69,8 +85,8 @@
 
   <footer>
     <span class="footer-logo">repo<span class="see">see</span>tory</span>
-    <a class="footer-link" href="https://github.com/ananaslegend/reposeetory" target="_blank" rel="noopener">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="#475569"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <a class="footer-link" href="https://github.com/ananaslegend/reposeetory" target="_blank" rel="noopener" aria-label="View source on GitHub">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="#475569" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       ananaslegend/reposeetory
     </a>
   </footer>
