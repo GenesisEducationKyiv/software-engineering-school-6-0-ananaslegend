@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
+
+// ErrRateLimited is returned when GitHub responds with 429 Too Many Requests.
+var ErrRateLimited = errors.New("github: rate limited")
 
 // GetLatestReleasesParams is the input to GetLatestReleases.
 type GetLatestReleasesParams struct {
@@ -62,6 +66,9 @@ func (c *Client) GetLatestReleases(ctx context.Context, p GetLatestReleasesParam
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("%w (retry-after: %s)", ErrRateLimited, resp.Header.Get("Retry-After"))
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("github graphql: unexpected status %d", resp.StatusCode)
 	}
@@ -110,6 +117,8 @@ func (c *Client) RepoExists(ctx context.Context, p domain.RepoExistsParams) (boo
 		return true, nil
 	case http.StatusNotFound:
 		return false, nil
+	case http.StatusTooManyRequests:
+		return false, fmt.Errorf("%w (retry-after: %s)", ErrRateLimited, resp.Header.Get("Retry-After"))
 	default:
 		return false, fmt.Errorf("github rest: unexpected status %d", resp.StatusCode)
 	}

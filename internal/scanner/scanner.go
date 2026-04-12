@@ -4,6 +4,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -109,6 +110,12 @@ func (s *Scanner) Tick(ctx context.Context) error {
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, githubclient.ErrRateLimited) {
+			s.m.rateLimitedTotal.Inc()
+			s.m.ticksTotal.WithLabelValues("rate_limited").Inc()
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("github rate limited, skipping tick")
+			return nil
+		}
 		s.m.ticksTotal.WithLabelValues("error").Inc()
 		return err
 	}
