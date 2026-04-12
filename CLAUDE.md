@@ -31,22 +31,25 @@ internal/
     client_test.go                       # тести з httptest.Server
     stub.go                              # StubClient (для subscription service)
     caching_client.go                    # CachingReleaseProvider декоратор (Redis MGET + pipeline SET)
+  transactor/
+    transactor.go                        # Transactor інтерфейс, PgxTransactor, Conn інтерфейс, ConnFromContext
+    mocks/mock_transactor.go             # mockgen
   scanner/                               # feature-модуль: перевірка нових релізів
     scanner.go                           # Scanner.Run/Tick; інтерфейси Repository, ReleaseProvider
     scanner_test.go
     mocks/                               # mockgen
-    repository/db.go                     # pgx: RunInTx з SELECT FOR UPDATE SKIP LOCKED
+    repository/db.go                     # pgx: SELECT FOR UPDATE SKIP LOCKED; conn() → ConnFromContext
   notifier/                              # feature-модуль: розсилка email із outbox
     notifier.go                          # Notifier.Run/Flush; інтерфейси Repository, MailSender
     notifier_test.go
     mocks/                               # mockgen
-    repository/db.go                     # pgx: ProcessNext (один запис за транзакцію)
+    repository/db.go                     # pgx: один запис за транзакцію; conn() → ConnFromContext
     emailer/                             # SMTPMailer + StubMailer (перенесено з mailer/)
   confirmer/                             # feature-модуль: розсилка confirm emails із outbox
     confirmer.go                         # Confirmer.Run/Flush; інтерфейси Repository, MailSender
     confirmer_test.go
     mocks/                               # mockgen
-    repository/db.go                     # pgx: ProcessNext (один запис за транзакцію)
+    repository/db.go                     # pgx: один запис за транзакцію; conn() → ConnFromContext
   mailer/
     stub.go                              # StubMailer (використовується якщо SMTP_HOST не задано)
     smtp.go                              # SMTPMailer (go-mail; активується через SMTP_HOST env)
@@ -141,6 +144,28 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 
 **Footer** на кожній сторінці: wordmark + іконка GitHub + посилання `ananaslegend/reposeetory`.
 
+**Іконки:** використовуються **Noto Color Emoji SVG** (Google, Apache 2.0) — вставляються **inline** прямо в HTML, без окремих файлів і без зовнішніх запитів. Брати SVG з `https://raw.githubusercontent.com/googlefonts/noto-emoji/main/svg/emoji_u{codepoint}.svg`.
+
+| Сторінка | Emoji | Codepoint | Призначення |
+|---|---|---|---|
+| `landing.html` (step 1) | 📝 | `1f4dd` | Subscribe |
+| `landing.html` (step 2) | ✉️ | `2709` | Confirm |
+| `landing.html` (step 3) | 🔔 | `1f514` | Get notified |
+| `landing.html` (BMC button) | ❤️ | `2764` | Support heart |
+| `subscribed.html` | 📬 | `1f4ec` | Check your inbox |
+| `confirmed.html` | ✅ | `2705` | Subscription confirmed |
+| `unsubscribed.html` | 👋 | `1f44b` | Unsubscribed |
+| `unavailable.html` | ⏰ | `23f0` | Link unavailable |
+| `oops.html` | ⚠️ | `26a0` | Something went wrong |
+
+**Правила підготовки SVG для inline:**
+1. Видалити `<?xml version="1.0" encoding="utf-8"?>` declaration
+2. Видалити `<!-- Generator: Adobe Illustrator... -->` коментар
+3. Спростити `<svg>` tag — залишити лише `xmlns`, `xmlns:xlink` (якщо є `xlink:href`), `width`, `height`, `viewBox`, `aria-hidden="true"`
+4. Видалити атрибути `version`, `x`, `y`, `style="enable-background:..."`, `xml:space`
+5. Перейменувати gradient/clipPath IDs на унікальні (`noto-warn-a`, `noto-wave-b` тощо) — щоб уникнути колізій при кількох SVG на одній сторінці
+6. Не використовувати emoji як текст — тільки SVG
+
 **Правило:** будь-яка нова сторінка — темний фон, без білих карток, без роздільних ліній між секціями, без зовнішніх CSS-залежностей.
 
 ### HTML-сторінки для браузерних ендпоінтів
@@ -165,10 +190,10 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 ### Scanner та Notifier
 
 **Scanner** (`internal/scanner/`) перевіряє нові релізи на GitHub батчем:
-- `Scanner.Tick(ctx)` → `Repository.RunInTx(ctx, limit=100, fn)` → SELECT 100 repo FOR UPDATE SKIP LOCKED
-- Всередині транзакції — один GraphQL запит на 100 репозиторіїв (aliased `r{id}: repository(...)`)
-- `ScanResult` може бути: `BumpOnly=true` (тег не змінився або релізів нема), `IsFirstScan=true` (перший раз бачимо тег — не нотифікувати), або `NewTag` зі `IsFirstScan=false` → вставляє рядки в `release_notifications`
-- Транзакція передається через context (`txKey{}` struct — приватний ключ контексту)
+- `Scanner.Tick(ctx)` → `tx.WithinTransaction` → `GetRepositoriesWithLock(ctx, 100)` → один GraphQL запит на всі репо
+- Для кожного репо: `UpsertLastSeen` викликається **завжди** (оновлює `last_seen_tag` і `last_checked_at = NOW()`), після чого `shouldNotify(repo, latestTag)` → якщо `repo.LastSeenTag != nil && latestTag != *repo.LastSeenTag` — вставляє рядки в `release_notifications`
+- `shouldNotify` повертає `false` при першому скані (`LastSeenTag == nil`) — підписники не отримують нотифікацію за перший побачений тег
+- `Repository` інтерфейс: `GetRepositoriesWithLock`, `UpsertLastSeen`, `InsertNotifications` — без `BumpCheckedAt`
 - **Без `GITHUB_TOKEN` сканер не запускається** (GraphQL API повертає 403 без токена)
 - `Scanner.GitHub` — `ReleaseProvider` інтерфейс; в `main.go` загортається в `CachingReleaseProvider` якщо `REDIS_URL` задано
 
@@ -199,7 +224,43 @@ id BIGSERIAL, subscription_id REFERENCES subscriptions ON DELETE CASCADE, create
 -- partial index: WHERE sent_at IS NULL
 ```
 
-**Транзакції через context:** `context.WithValue(ctx, txKey{}, tx)` — пакет репозиторію перевіряє контекст і використовує tx замість pool. `txKey{}` — приватний struct-тип, щоб уникнути конфліктів.
+**Транзакції через context:** керується пакетом `internal/transactor`. `PgxTransactor.WithinTransaction` записує `pgx.Tx` у контекст через приватний `dbKey{}`. Репозиторій отримує з'єднання через `transactor.ConnFromContext(ctx, pool)` — повертає tx з контексту або pool, якщо транзакції нема. Кожен репозиторій має однорядковий хелпер `conn(ctx) transactor.Conn`.
+
+### Transactor — управління транзакціями
+
+`internal/transactor/transactor.go` — єдиний пакет для транзакцій у всьому проєкті.
+
+**Інтерфейси:**
+```go
+// Conn — спільний інтерфейс для *pgxpool.Pool і pgx.Tx
+type Conn interface {
+    Begin(ctx context.Context) (pgx.Tx, error)
+    Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+    Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+    QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+    CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
+    SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+}
+
+// Transactor — використовується в Config усіх feature-модулів
+type Transactor interface {
+    WithinTransaction(ctx context.Context, fn func(ctx context.Context) error) error
+}
+```
+
+**Патерн у репозиторіях** — кожен pgx-репозиторій має однорядковий хелпер:
+```go
+func (r *Repository) conn(ctx context.Context) transactor.Conn {
+    return transactor.ConnFromContext(ctx, r.pool)
+}
+// Використання:
+r.conn(ctx).Exec(ctx, `UPDATE ...`, args...)
+r.conn(ctx).Query(ctx, `SELECT ...`, args...)
+```
+
+`ConnFromContext` повертає tx з контексту або `pool` якщо транзакції нема — репозиторій не знає, чи виконується в транзакції.
+
+**Wiring:** єдиний `txr := transactor.New(pool)` у `main.go` передається у `scanner.Config`, `notifier.Config`, `confirmer.Config`.
 
 ### Subscription service — без MailSender
 `internal/subscription/service/service.go` не має `MailSender` інтерфейсу і не надсилає email. Підтвердження тепер повністю асинхронне через outbox. Сервіс відповідає лише за валідацію, upsert репозиторію і `CreateSubscription` (яка атомарно створює і subscription, і confirmation outbox row).

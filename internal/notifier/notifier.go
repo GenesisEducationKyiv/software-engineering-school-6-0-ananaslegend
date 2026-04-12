@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/transactor"
 )
 
 // PendingNotification is one outbox row joined with subscription + repository data.
@@ -24,12 +25,9 @@ type PendingNotification struct {
 }
 
 // Repository is the storage contract for the notifier.
-// ProcessNext begins a transaction, selects one pending release_notifications row
-// FOR UPDATE SKIP LOCKED, calls fn with it. If fn returns nil: marks sent_at and
-// commits. If fn returns an error: rolls back. Returns (false, nil) when the
-// queue is empty.
 type Repository interface {
-	ProcessNext(ctx context.Context, fn func(ctx context.Context, n PendingNotification) error) (bool, error)
+	GetNotificationsWithLock(ctx context.Context, limit int) ([]PendingNotification, error)
+	MarkSent(ctx context.Context, id int64) error
 }
 
 // MailSender sends release notification emails.
@@ -39,6 +37,7 @@ type MailSender interface {
 
 // Config holds Notifier dependencies.
 type Config struct {
+	Tx       transactor.Transactor
 	Repo     Repository
 	Mailer   MailSender
 	Interval time.Duration
@@ -48,6 +47,7 @@ type Config struct {
 
 // Notifier periodically drains the release_notifications outbox by sending emails.
 type Notifier struct {
+	tx       transactor.Transactor
 	repo     Repository
 	mailer   MailSender
 	interval time.Duration
@@ -55,9 +55,12 @@ type Notifier struct {
 	m        notifierMetrics
 }
 
+const notifyLimit = 1
+
 // New creates a Notifier from cfg.
 func New(cfg Config) *Notifier {
 	return &Notifier{
+		tx:       cfg.Tx,
 		repo:     cfg.Repo,
 		mailer:   cfg.Mailer,
 		interval: cfg.Interval,
@@ -86,21 +89,34 @@ func (n *Notifier) Flush(ctx context.Context) {
 	defer func() { n.m.flushDuration.Observe(time.Since(start).Seconds()) }()
 
 	for {
-		processed, err := n.repo.ProcessNext(ctx, func(ctx context.Context, pending PendingNotification) error {
+		var processed bool
+		err := n.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+			items, err := n.repo.GetNotificationsWithLock(ctx, notifyLimit)
+			if err != nil {
+				return err
+			}
+			if len(items) == 0 {
+				return nil
+			}
+			p := items[0]
 			sendErr := n.mailer.SendRelease(ctx, domain.SendReleaseParams{
-				To:           pending.Email,
-				RepoFullName: pending.RepoOwner + "/" + pending.RepoName,
-				ReleaseTag:   pending.ReleaseTag,
+				To:           p.Email,
+				RepoFullName: p.RepoOwner + "/" + p.RepoName,
+				ReleaseTag:   p.ReleaseTag,
 				ReleaseURL: fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s",
-					pending.RepoOwner, pending.RepoName, pending.ReleaseTag),
-				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, pending.UnsubscribeToken),
+					p.RepoOwner, p.RepoName, p.ReleaseTag),
+				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, p.UnsubscribeToken),
 			})
 			if sendErr != nil {
 				n.m.emailsSent.WithLabelValues("error").Inc()
-			} else {
-				n.m.emailsSent.WithLabelValues("ok").Inc()
+				return sendErr
 			}
-			return sendErr
+			n.m.emailsSent.WithLabelValues("ok").Inc()
+			if err = n.repo.MarkSent(ctx, p.ID); err != nil {
+				return err
+			}
+			processed = true
+			return nil
 		})
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Msg("notifier: process next failed")

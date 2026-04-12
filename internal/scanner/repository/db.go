@@ -3,15 +3,11 @@ package repository
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/ananaslegend/reposeetory/internal/scanner"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/jackc/pgx/v5"
+	"github.com/ananaslegend/reposeetory/internal/transactor"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type txKey struct{}
 
 // Repository implements scanner.Repository using pgx.
 type Repository struct {
@@ -23,53 +19,14 @@ func New(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-// RunInTx begins a transaction, locks repos, calls fn, processes results, commits.
-func (r *Repository) RunInTx(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("scanner: begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	txCtx := context.WithValue(ctx, txKey{}, tx)
-
-	repos, err := lockRepos(txCtx, limit)
-	if err != nil {
-		return err
-	}
-
-	results, err := fn(txCtx, repos)
-	if err != nil {
-		return err
-	}
-
-	now := time.Now()
-	for _, res := range results {
-		if res.BumpOnly {
-			if err := bumpCheckedAt(txCtx, res.RepoID, now); err != nil {
-				return err
-			}
-			continue
-		}
-		if !res.IsFirstScan {
-			if err := insertNotifications(txCtx, res.RepoID, res.NewTag); err != nil {
-				return err
-			}
-		}
-		if err := upsertLastSeen(txCtx, res.RepoID, res.NewTag, now); err != nil {
-			return err
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("scanner: commit: %w", err)
-	}
-	return nil
+// conn returns the active transaction from ctx, or the pool if no transaction is present.
+func (r *Repository) conn(ctx context.Context) transactor.Conn {
+	return transactor.ConnFromContext(ctx, r.pool)
 }
 
-func lockRepos(ctx context.Context, limit int) ([]domain.GitHubRepo, error) {
-	tx := ctx.Value(txKey{}).(pgx.Tx)
-	rows, err := tx.Query(ctx, `
+// GetRepositoriesWithLock selects up to limit repos FOR UPDATE SKIP LOCKED.
+func (r *Repository) GetRepositoriesWithLock(ctx context.Context, limit int) ([]domain.GitHubRepo, error) {
+	rows, err := r.conn(ctx).Query(ctx, `
 		SELECT id, owner, name, last_seen_tag
 		FROM repositories
 		ORDER BY last_checked_at NULLS FIRST
@@ -77,7 +34,7 @@ func lockRepos(ctx context.Context, limit int) ([]domain.GitHubRepo, error) {
 		FOR UPDATE SKIP LOCKED
 	`, limit)
 	if err != nil {
-		return nil, fmt.Errorf("scanner: lock repos: %w", err)
+		return nil, fmt.Errorf("scanner: get repos with lock: %w", err)
 	}
 	defer rows.Close()
 
@@ -92,9 +49,9 @@ func lockRepos(ctx context.Context, limit int) ([]domain.GitHubRepo, error) {
 	return repos, rows.Err()
 }
 
-func insertNotifications(ctx context.Context, repoID int64, tag string) error {
-	tx := ctx.Value(txKey{}).(pgx.Tx)
-	_, err := tx.Exec(ctx, `
+// InsertNotifications inserts release_notifications rows for all confirmed subscribers of repoID.
+func (r *Repository) InsertNotifications(ctx context.Context, repoID int64, tag string) error {
+	_, err := r.conn(ctx).Exec(ctx, `
 		INSERT INTO release_notifications (subscription_id, repository_id, release_tag)
 		SELECT id, $1, $2
 		FROM subscriptions
@@ -106,26 +63,15 @@ func insertNotifications(ctx context.Context, repoID int64, tag string) error {
 	return nil
 }
 
-func upsertLastSeen(ctx context.Context, repoID int64, newTag string, now time.Time) error {
-	tx := ctx.Value(txKey{}).(pgx.Tx)
-	_, err := tx.Exec(ctx, `
+// UpsertLastSeen updates last_seen_tag and last_checked_at for repoID.
+func (r *Repository) UpsertLastSeen(ctx context.Context, repoID int64, newTag string) error {
+	_, err := r.conn(ctx).Exec(ctx, `
 		UPDATE repositories
-		SET last_seen_tag = $1, last_checked_at = $2
-		WHERE id = $3
-	`, newTag, now, repoID)
+		SET last_seen_tag = $1, last_checked_at = NOW()
+		WHERE id = $2
+	`, newTag, repoID)
 	if err != nil {
 		return fmt.Errorf("scanner: upsert last seen repo %d: %w", repoID, err)
-	}
-	return nil
-}
-
-func bumpCheckedAt(ctx context.Context, repoID int64, now time.Time) error {
-	tx := ctx.Value(txKey{}).(pgx.Tx)
-	_, err := tx.Exec(ctx, `
-		UPDATE repositories SET last_checked_at = $1 WHERE id = $2
-	`, now, repoID)
-	if err != nil {
-		return fmt.Errorf("scanner: bump last_checked_at repo %d: %w", repoID, err)
 	}
 	return nil
 }

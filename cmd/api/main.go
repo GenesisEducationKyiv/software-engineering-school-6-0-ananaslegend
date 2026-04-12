@@ -41,6 +41,7 @@ import (
 	redisstorage "github.com/ananaslegend/reposeetory/internal/storage/redis"
 	"github.com/ananaslegend/reposeetory/internal/subscription/repository"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service"
+	"github.com/ananaslegend/reposeetory/internal/transactor"
 	dbmigrations "github.com/ananaslegend/reposeetory/migrations"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
@@ -134,7 +135,10 @@ func main() {
 		log.Info().Msg("github release cache: disabled")
 	}
 
+	txr := transactor.New(pool)
+
 	scan := scanner.New(scanner.Config{
+		Tx:       txr,
 		Repo:     scannerrepo.New(pool),
 		GitHub:   releaseProvider,
 		Interval: cfg.ScannerInterval,
@@ -142,6 +146,7 @@ func main() {
 	})
 
 	notify := notifier.New(notifier.Config{
+		Tx:       txr,
 		Repo:     notifierrepo.New(pool),
 		Mailer:   mailSender,
 		Interval: cfg.NotifierInterval,
@@ -153,6 +158,7 @@ func main() {
 	go notify.Run(ctx)
 
 	confirm := confirmer.New(confirmer.Config{
+		Tx:       txr,
 		Repo:     confirmerrepo.New(pool),
 		Mailer:   mailSender,
 		Interval: cfg.ConfirmerInterval,

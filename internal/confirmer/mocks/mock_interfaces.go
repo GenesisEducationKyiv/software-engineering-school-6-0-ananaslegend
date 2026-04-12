@@ -42,19 +42,33 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
-// ProcessNext mocks base method.
-func (m *MockRepository) ProcessNext(ctx context.Context, fn func(context.Context, confirmer.PendingConfirmation) error) (bool, error) {
+// GetConfirmationsWithLock mocks base method.
+func (m *MockRepository) GetConfirmationsWithLock(ctx context.Context, limit int) ([]confirmer.PendingConfirmation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessNext", ctx, fn)
-	ret0, _ := ret[0].(bool)
+	ret := m.ctrl.Call(m, "GetConfirmationsWithLock", ctx, limit)
+	ret0, _ := ret[0].([]confirmer.PendingConfirmation)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ProcessNext indicates an expected call of ProcessNext.
-func (mr *MockRepositoryMockRecorder) ProcessNext(ctx, fn any) *gomock.Call {
+// GetConfirmationsWithLock indicates an expected call of GetConfirmationsWithLock.
+func (mr *MockRepositoryMockRecorder) GetConfirmationsWithLock(ctx, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessNext", reflect.TypeOf((*MockRepository)(nil).ProcessNext), ctx, fn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfirmationsWithLock", reflect.TypeOf((*MockRepository)(nil).GetConfirmationsWithLock), ctx, limit)
+}
+
+// MarkSent mocks base method.
+func (m *MockRepository) MarkSent(ctx context.Context, id int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkSent", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkSent indicates an expected call of MarkSent.
+func (mr *MockRepositoryMockRecorder) MarkSent(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkSent", reflect.TypeOf((*MockRepository)(nil).MarkSent), ctx, id)
 }
 
 // MockMailSender is a mock of MailSender interface.

@@ -14,161 +14,132 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/scanner"
 	"github.com/ananaslegend/reposeetory/internal/scanner/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/stretchr/testify/assert"
+	txmocks "github.com/ananaslegend/reposeetory/internal/transactor/mocks"
 	"github.com/stretchr/testify/require"
 )
 
-func newScanner(t *testing.T) (*scanner.Scanner, *mocks.MockRepository, *mocks.MockReleaseProvider) {
+func newScanner(t *testing.T) (*scanner.Scanner, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockReleaseProvider) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
+	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
 	gh := mocks.NewMockReleaseProvider(ctrl)
-	s := scanner.New(scanner.Config{
-		Repo:   repo,
-		GitHub: gh,
-	})
-	return s, repo, gh
+	s := scanner.New(scanner.Config{Tx: tx, Repo: repo, GitHub: gh})
+	return s, tx, repo, gh
 }
 
-// invokeRunInTx is a helper that makes the mock RunInTx call fn with the given repos.
-func invokeRunInTx(repos []domain.GitHubRepo) func(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-	return func(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-		_, err := fn(ctx, repos)
-		return err
-	}
+// invokeWithinTransaction makes the mock call fn with the given context.
+func invokeWithinTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 func TestScanner_NoRepos_NoGitHubCall(t *testing.T) {
-	s, repo, _ := newScanner(t)
+	s, tx, repo, _ := newScanner(t)
 
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(invokeRunInTx(nil))
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(nil, nil)
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)
 }
 
-func TestScanner_FirstScan_IsFirstScanTrue(t *testing.T) {
-	s, repo, gh := newScanner(t)
+func TestScanner_FirstScan_UpsertOnlyNoNotification(t *testing.T) {
+	s, tx, repo, gh := newScanner(t)
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: nil}}
 
-	var capturedResults []scanner.ScanResult
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-			results, err := fn(ctx, repos)
-			capturedResults = results
-			return err
-		},
-	)
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
 	gh.EXPECT().GetLatestReleases(gomock.Any(), githubclient.GetLatestReleasesParams{Repos: repos}).
 		Return(map[int64]string{1: "v1.0.0"}, nil)
+	repo.EXPECT().UpsertLastSeen(gomock.Any(), int64(1), "v1.0.0").Return(nil)
+	// InsertNotifications must NOT be called on first scan
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)
-	require.Len(t, capturedResults, 1)
-	assert.Equal(t, int64(1), capturedResults[0].RepoID)
-	assert.Equal(t, "v1.0.0", capturedResults[0].NewTag)
-	assert.True(t, capturedResults[0].IsFirstScan)
 }
 
-func TestScanner_NewRelease_IsFirstScanFalse(t *testing.T) {
-	s, repo, gh := newScanner(t)
+func TestScanner_NewRelease_InsertsNotificationsAndUpserts(t *testing.T) {
+	s, tx, repo, gh := newScanner(t)
 
 	oldTag := "v1.0.0"
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: &oldTag}}
 
-	var capturedResults []scanner.ScanResult
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-			results, err := fn(ctx, repos)
-			capturedResults = results
-			return err
-		},
-	)
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
 	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(map[int64]string{1: "v2.0.0"}, nil)
+	repo.EXPECT().InsertNotifications(gomock.Any(), int64(1), "v2.0.0").Return(nil)
+	repo.EXPECT().UpsertLastSeen(gomock.Any(), int64(1), "v2.0.0").Return(nil)
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)
-	require.Len(t, capturedResults, 1)
-	assert.Equal(t, "v2.0.0", capturedResults[0].NewTag)
-	assert.False(t, capturedResults[0].IsFirstScan)
 }
 
-func TestScanner_NoChange_BumpsCheckedAt(t *testing.T) {
-	s, repo, gh := newScanner(t)
+func TestScanner_NoChange_UpsertOnly(t *testing.T) {
+	s, tx, repo, gh := newScanner(t)
 
 	tag := "v1.0.0"
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: &tag}}
 
-	var capturedResults []scanner.ScanResult
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-			results, err := fn(ctx, repos)
-			capturedResults = results
-			return err
-		},
-	)
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
 	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(map[int64]string{1: "v1.0.0"}, nil)
+	repo.EXPECT().UpsertLastSeen(gomock.Any(), int64(1), "v1.0.0").Return(nil)
+	// InsertNotifications must NOT be called — tag unchanged
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)
-	require.Len(t, capturedResults, 1)
-	assert.Equal(t, int64(1), capturedResults[0].RepoID)
-	assert.True(t, capturedResults[0].BumpOnly)
+}
+
+func TestScanner_NoRelease_UpsertWithEmptyTag(t *testing.T) {
+	s, tx, repo, gh := newScanner(t)
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: nil}}
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
+	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(map[int64]string{}, nil)
+	repo.EXPECT().UpsertLastSeen(gomock.Any(), int64(1), "").Return(nil)
+	// InsertNotifications must NOT be called — LastSeenTag is nil (first scan)
+
+	err := s.Tick(context.Background())
+	require.NoError(t, err)
 }
 
 func TestScanner_GitHubError_PropagatesError(t *testing.T) {
-	s, repo, gh := newScanner(t)
+	s, tx, repo, gh := newScanner(t)
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar"}}
 	ghErr := errors.New("github unavailable")
 
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(invokeRunInTx(repos))
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
 	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(nil, ghErr)
 
 	err := s.Tick(context.Background())
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "get latest releases")
+	require.ErrorContains(t, err, "get latest releases")
 }
 
-func TestScanner_NoRelease_BumpsCheckedAt(t *testing.T) {
-	s, repo, gh := newScanner(t)
-
-	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: nil}}
-
-	var capturedResults []scanner.ScanResult
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, limit int, fn func(context.Context, []domain.GitHubRepo) ([]scanner.ScanResult, error)) error {
-			results, err := fn(ctx, repos)
-			capturedResults = results
-			return err
-		},
-	)
-	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(map[int64]string{}, nil)
-
-	err := s.Tick(context.Background())
-	require.NoError(t, err)
-	require.Len(t, capturedResults, 1)
-	assert.Equal(t, int64(1), capturedResults[0].RepoID)
-	assert.True(t, capturedResults[0].BumpOnly)
-}
-
-func newScannerWithRegistry(t *testing.T) (*scanner.Scanner, *mocks.MockRepository, *mocks.MockReleaseProvider, *prometheus.Registry) {
+func newScannerWithRegistry(t *testing.T) (*scanner.Scanner, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockReleaseProvider, *prometheus.Registry) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
+	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
 	gh := mocks.NewMockReleaseProvider(ctrl)
 	reg := prometheus.NewRegistry()
-	s := scanner.New(scanner.Config{Repo: repo, GitHub: gh, Registry: reg})
-	return s, repo, gh, reg
+	s := scanner.New(scanner.Config{Tx: tx, Repo: repo, GitHub: gh, Registry: reg})
+	return s, tx, repo, gh, reg
 }
 
 func TestScanner_Tick_IncrementsMetrics(t *testing.T) {
-	s, repo, gh, reg := newScannerWithRegistry(t)
+	s, tx, repo, gh, reg := newScannerWithRegistry(t)
 
 	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar", LastSeenTag: nil}}
-	repo.EXPECT().RunInTx(gomock.Any(), 100, gomock.Any()).DoAndReturn(invokeRunInTx(repos))
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
 	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(map[int64]string{1: "v1.0.0"}, nil)
+	repo.EXPECT().UpsertLastSeen(gomock.Any(), int64(1), "v1.0.0").Return(nil)
 
 	err := s.Tick(context.Background())
 	require.NoError(t, err)

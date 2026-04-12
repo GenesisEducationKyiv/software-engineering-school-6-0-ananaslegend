@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/transactor"
 )
 
 // PendingConfirmation is one outbox row joined with subscription + repository data.
@@ -22,11 +23,9 @@ type PendingConfirmation struct {
 }
 
 // Repository is the storage contract for the confirmer.
-// ProcessNext begins a transaction, selects one pending confirmation_notifications row
-// FOR UPDATE SKIP LOCKED, calls fn with it. If fn returns nil: marks sent_at and
-// commits. If fn returns an error: rolls back. Returns (false, nil) when the queue is empty.
 type Repository interface {
-	ProcessNext(ctx context.Context, fn func(ctx context.Context, c PendingConfirmation) error) (bool, error)
+	GetConfirmationsWithLock(ctx context.Context, limit int) ([]PendingConfirmation, error)
+	MarkSent(ctx context.Context, id int64) error
 }
 
 // MailSender sends confirmation emails.
@@ -36,6 +35,7 @@ type MailSender interface {
 
 // Config holds Confirmer dependencies.
 type Config struct {
+	Tx       transactor.Transactor
 	Repo     Repository
 	Mailer   MailSender
 	Interval time.Duration
@@ -45,6 +45,7 @@ type Config struct {
 
 // Confirmer periodically drains the confirmation_notifications outbox by sending emails.
 type Confirmer struct {
+	tx       transactor.Transactor
 	repo     Repository
 	mailer   MailSender
 	interval time.Duration
@@ -52,9 +53,12 @@ type Confirmer struct {
 	m        confirmerMetrics
 }
 
+const confirmLimit = 1
+
 // New creates a Confirmer from cfg.
 func New(cfg Config) *Confirmer {
 	return &Confirmer{
+		tx:       cfg.Tx,
 		repo:     cfg.Repo,
 		mailer:   cfg.Mailer,
 		interval: cfg.Interval,
@@ -80,18 +84,31 @@ func (c *Confirmer) Run(ctx context.Context) {
 // Flush drains all currently pending confirmations. Exported for testing.
 func (c *Confirmer) Flush(ctx context.Context) {
 	for {
-		processed, err := c.repo.ProcessNext(ctx, func(ctx context.Context, pending PendingConfirmation) error {
-			sendErr := c.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
-				To:           pending.Email,
-				ConfirmURL:   c.baseURL + "/api/confirm/" + pending.ConfirmToken,
-				RepoFullName: pending.RepoOwner + "/" + pending.RepoName,
-			})
-			if sendErr != nil {
-				c.m.emailsSent.WithLabelValues("error").Inc()
-			} else {
-				c.m.emailsSent.WithLabelValues("ok").Inc()
+		var processed bool
+		err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+			items, err := c.repo.GetConfirmationsWithLock(ctx, confirmLimit)
+			if err != nil {
+				return err
 			}
-			return sendErr
+			if len(items) == 0 {
+				return nil
+			}
+			p := items[0]
+			err = c.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
+				To:           p.Email,
+				ConfirmURL:   c.baseURL + "/api/confirm/" + p.ConfirmToken,
+				RepoFullName: p.RepoOwner + "/" + p.RepoName,
+			})
+			if err != nil {
+				c.m.emailsSent.WithLabelValues("error").Inc()
+				return err
+			}
+			c.m.emailsSent.WithLabelValues("ok").Inc()
+			if err = c.repo.MarkSent(ctx, p.ID); err != nil {
+				return err
+			}
+			processed = true
+			return nil
 		})
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Msg("confirmer: process next failed")
