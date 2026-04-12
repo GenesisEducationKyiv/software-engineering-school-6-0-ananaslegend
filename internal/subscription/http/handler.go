@@ -22,13 +22,41 @@ type SubscriptionService interface {
 }
 
 type Handler struct {
-	svc        SubscriptionService
-	writeError func(w http.ResponseWriter, r *http.Request, err error)
-	pages      pages.Renderer
+	svc   SubscriptionService
+	pages pages.Renderer
 }
 
-func NewHandler(svc SubscriptionService, writeError func(w http.ResponseWriter, r *http.Request, err error)) *Handler {
-	return &Handler{svc: svc, writeError: writeError}
+func NewHandler(svc SubscriptionService) *Handler {
+	return &Handler{svc: svc}
+}
+
+func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	status := errorStatus(err)
+	if status == http.StatusInternalServerError {
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg("internal server error")
+	}
+	msg := err.Error()
+	if status == http.StatusInternalServerError {
+		msg = "internal server error"
+	}
+	writeJSON(w, status, ErrorResponse{Error: msg})
+}
+
+func errorStatus(err error) int {
+	switch {
+	case errors.Is(err, domain.ErrInvalidRepoFormat):
+		return http.StatusBadRequest
+	case errors.As(err, new(*BadRequestError)):
+		return http.StatusBadRequest
+	case errors.Is(err, domain.ErrRepoNotFound), errors.Is(err, domain.ErrTokenNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, domain.ErrAlreadyExists):
+		return http.StatusConflict
+	case errors.Is(err, domain.ErrTokenExpired):
+		return http.StatusGone
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 // Subscribe godoc

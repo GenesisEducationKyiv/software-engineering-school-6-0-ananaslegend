@@ -29,10 +29,4 @@ WHERE confirmed_at IS NULL
 
 ## Refactor code 
 
-## Обробка HTTP помилок у відповіді
-
 ## Перевірити gracuful shutdown для всіх воркерів (Scanner, Notifier, Confirmer)
-
-## Інтеграційні тести 
-
-## Transactor

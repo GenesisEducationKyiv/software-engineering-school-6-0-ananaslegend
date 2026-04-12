@@ -174,7 +174,7 @@ func main() {
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
 		Registry:        reg,
 	})
-	subHandler := subhttp.NewHandler(svc, httpapi.WriteError)
+	subHandler := subhttp.NewHandler(svc)
 	router := httpapi.NewRouter(httpapi.RouterConfig{Log: log, SubHandler: subHandler, Registry: reg})
 
 	srv := &http.Server{
