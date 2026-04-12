@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -154,8 +155,13 @@ func main() {
 		Registry: reg,
 	})
 
-	go scan.Run(ctx)
-	go notify.Run(ctx)
+	var cronsWG sync.WaitGroup
+
+	cronsWG.Add(1)
+	go func() { defer cronsWG.Done(); scan.Run(ctx) }()
+
+	cronsWG.Add(1)
+	go func() { defer cronsWG.Done(); notify.Run(ctx) }()
 
 	confirm := confirmer.New(confirmer.Config{
 		Tx:       txr,
@@ -165,7 +171,9 @@ func main() {
 		BaseURL:  cfg.AppBaseURL,
 		Registry: reg,
 	})
-	go confirm.Run(ctx)
+
+	cronsWG.Add(1)
+	go func() { defer cronsWG.Done(); confirm.Run(ctx) }()
 
 	svc := service.New(service.Config{
 		Repo:            repository.New(pool),
@@ -186,7 +194,7 @@ func main() {
 
 	go func() {
 		log.Info().Str("addr", cfg.HTTPAddr).Msg("server listening")
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Msg("http server error")
 		}
 	}()
@@ -197,9 +205,11 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTPShutdownTimeout)
 	defer cancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err = srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
+
+	cronsWG.Wait()
 	log.Info().Msg("shutdown complete")
 }
 

@@ -28,5 +28,3 @@ WHERE confirmed_at IS NULL
 Один сервіс піднімає обидва транспорти.
 
 ## Refactor code 
-
-## Перевірити gracuful shutdown для всіх воркерів (Scanner, Notifier, Confirmer)
