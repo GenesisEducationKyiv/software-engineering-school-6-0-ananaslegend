@@ -1,0 +1,9 @@
+.env
+bin/
+*.test
+*.exe
+*.out
+.idea
+.superpowers
+api
+.worktrees/

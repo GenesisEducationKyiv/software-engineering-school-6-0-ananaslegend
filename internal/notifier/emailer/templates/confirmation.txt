@@ -1,0 +1,11 @@
+Confirm your subscription to {{.RepoFullName}}
+
+You requested to receive release notifications for {{.RepoFullName}}.
+
+Confirm your subscription by visiting this link:
+{{.ConfirmURL}}
+
+This link expires in 24 hours.
+
+If you did not request this, you can safely ignore this email.
+
