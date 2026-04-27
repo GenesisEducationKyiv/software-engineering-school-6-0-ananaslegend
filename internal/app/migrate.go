@@ -1,0 +1,34 @@
+package app
+
+import (
+	"errors"
+	"strings"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/rs/zerolog"
+
+	dbmigrations "github.com/ananaslegend/reposeetory/migrations"
+)
+
+func runMigrations(databaseURL string, log zerolog.Logger) error {
+	src, err := iofs.New(dbmigrations.FS, ".")
+	if err != nil {
+		return err
+	}
+
+	pgx5URL := "pgx5://" + strings.TrimPrefix(strings.TrimPrefix(databaseURL, "postgres://"), "postgresql://")
+
+	m, err := migrate.NewWithSourceInstance("iofs", src, pgx5URL)
+	if err != nil {
+		return err
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return err
+	}
+
+	log.Info().Msg("migrations applied")
+	return nil
+}

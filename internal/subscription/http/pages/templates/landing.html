@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>reposeetory — watch GitHub releases</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0);
+      white-space: nowrap; border: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      min-height: 100dvh;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+    .hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 24px 40px;
+      text-align: center;
+      gap: 20px;
+    }
+    .wordmark {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+    }
+    .wordmark .see {
+      color: #60a5fa;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 5px;
+      text-decoration-thickness: 2px;
+      text-decoration-color: #60a5fa;
+    }
+    .tagline {
+      font-size: 16px;
+      color: #94a3b8;
+      line-height: 1.6;
+      max-width: 360px;
+    }
+    .tagline em { color: #60a5fa; font-style: normal; }
+    .form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .form input {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      height: 44px;
+      padding: 0 14px;
+      font-size: 14px;
+      color: #e2e8f0;
+      outline: none;
+      width: 100%;
+      font-family: inherit;
+    }
+    .form input::placeholder { color: #475569; }
+    .form input:focus-visible {
+      border-color: #60a5fa;
+      outline: 2px solid rgba(96, 165, 250, 0.35);
+      outline-offset: 0;
+    }
+    .form button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      height: 44px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .form button:hover:not(:disabled) {
+      background: #1d4ed8;
+      box-shadow: 0 0 16px rgba(37, 99, 235, 0.45);
+    }
+    .form button:active:not(:disabled) { background: #1e40af; }
+    .form button:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.5);
+      outline-offset: 2px;
+    }
+    .form button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error {
+      font-size: 13px;
+      color: #f87171;
+      min-height: 20px;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      max-width: 400px;
+    }
+    .chip {
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: #64748b;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+    }
+    .how { padding: 0 24px 48px; text-align: center; }
+    .how-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      color: #475569;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+    .steps {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .step { flex: 1; padding: 0 12px; }
+    .step-icon { display: flex; justify-content: center; margin-bottom: 10px; }
+    .step-title { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-bottom: 6px; }
+    .step-desc { font-size: 12px; color: #64748b; line-height: 1.5; }
+    .step-connector { padding-top: 12px; color: #334155; font-size: 16px; white-space: nowrap; }
+    footer {
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-logo { font-size: 13px; font-weight: 700; color: #334155; }
+    .footer-logo .see { color: #60a5fa; }
+    .footer-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #475569;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .footer-link:hover { color: #64748b; }
+    .bmc-wrap { display: flex; justify-content: center; padding: 0 24px 56px; }
+    .bmc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #94a3b8;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 24px;
+      padding: 12px 28px;
+      text-decoration: none;
+      font-family: inherit;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .bmc-btn:hover { border-color: #60a5fa; color: #e2e8f0; }
+    .bmc-btn:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.5);
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .form button, .bmc-btn, .footer-link { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="wordmark">repo<span class="see">see</span>tory</div>
+    <p class="tagline">Don't monitor GitHub.<br>Just <em>see</em> the updates.</p>
+    <form class="form" id="subscribe-form" onsubmit="handleSubmit(event)" novalidate>
+      <label class="visually-hidden" for="repo">GitHub repository (owner/repository)</label>
+      <input type="text" id="repo" name="repository" placeholder="owner/repository" autocomplete="off" required>
+      <label class="visually-hidden" for="email">Your email address</label>
+      <input type="email" id="email" name="email" placeholder="your@email.com" autocomplete="email" required>
+      <button type="submit" id="submit-btn">Subscribe repository →</button>
+      <p class="error" id="error-msg" role="alert" aria-live="polite"></p>
+    </form>
+    <div class="chips" aria-label="Example repositories">
+      <span class="chip">axios/axios</span>
+      <span class="chip">golang/go</span>
+      <span class="chip">tailwindcss/tailwindcss</span>
+      <span class="chip">vercel/next.js</span>
+    </div>
+  </section>
+
+  <div class="bmc-wrap">
+    <a class="bmc-btn" href="https://destream.net/live/ananaslegend/donate" target="_blank" rel="noopener">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 128 128" aria-hidden="true"><path style="fill:#F44336;" d="M93.99,8.97c-21.91,0-29.96,22.39-29.96,22.39S56.09,8.97,34.03,8.97c-16.58,0-35.48,13.14-28.5,43.01c6.98,29.87,58.56,67.08,58.56,67.08s51.39-37.21,58.38-67.08C129.45,22.11,111.91,8.97,93.99,8.97z"/><path style="fill:#CC3333;" d="M30.65,11.2c17.2,0,25.74,18.49,28.5,25.98c0.39,1.07,1.88,1.1,2.33,0.06L64,31.35C60.45,20.01,50.69,8.97,34.03,8.97c-6.9,0-14.19,2.28-19.86,7.09C19.18,12.77,25.05,11.2,30.65,11.2z"/><path style="fill:#CC3333;" d="M93.99,8.97c-5.29,0-10.11,1.15-13.87,3.47c2.64-1.02,5.91-1.24,9.15-1.24c16.21,0,30.72,12.29,24.17,40.7c-5.62,24.39-38.46,53.98-48.49,65.27c-0.64,0.72-0.86,1.88-0.86,1.88s51.39-37.21,58.38-67.08C129.45,22.11,111.94,8.97,93.99,8.97z"/><path style="fill:#FF8A80;" d="M17.04,24.82c3.75-4.68,10.45-8.55,16.13-4.09c3.07,2.41,1.73,7.35-1.02,9.43c-4,3.04-7.48,4.87-9.92,9.63c-1.46,2.86-2.34,5.99-2.79,9.18c-0.18,1.26-1.83,1.57-2.45,0.46C12.77,41.95,11.57,31.65,17.04,24.82z"/><path style="fill:#FF8A80;" d="M77.16,34.66c-1.76,0-3-1.7-2.36-3.34c1.19-3.02,2.73-5.94,4.58-8.54c2.74-3.84,7.95-6.08,11.25-3.75c3.38,2.38,2.94,7.14,0.57,9.44C86.11,33.4,79.69,34.66,77.16,34.66z"/></svg>
+      Support Me
+    </a>
+  </div>
+
+  <section class="how" aria-label="How it works">
+    <p class="how-label">How it works</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 128 128" aria-hidden="true"><path style="fill:#FFFFFF;" d="M100.39,123.79H6.8c-1.55,0-2.8-1.25-2.8-2.8V7.01c0-1.55,1.25-2.8,2.8-2.8h93.59c1.55,0,2.8,1.25,2.8,2.8v113.98C103.19,122.54,101.94,123.79,100.39,123.79z"/><g><path style="fill:#6FBFF0;" d="M99.19,8.21v111.58H8V8.21H99.19 M100.39,4.21H6.8C5.25,4.21,4,5.46,4,7.01v113.98c0,1.55,1.25,2.8,2.8,2.8h93.59c1.55,0,2.8-1.25,2.8-2.8V7.01C103.19,5.46,101.94,4.21,100.39,4.21L100.39,4.21z"/></g><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M17.34,24.79c2.05-0.91,4.4,0.05,6.64,0.09c2.51,0.05,4.95-1.08,7.46-0.94c2.47,0.13,4.74,1.47,7.2,1.68c3.09,0.25,6.03-1.3,9.1-1.69c4.37-0.56,8.85,1.23,13.17,0.32"/><g><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M17.25,43.26c1.74-0.47,3.6-0.47,5.34-0.02c1.64,0.43,3.19,1.25,4.88,1.29c2.16,0.05,4.13-1.19,6.24-1.63c5.04-1.06,10.39,2.44,15.26,0.78"/><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M64.12,43.48c2.93-0.97,6.09,0.19,9.17,0.29c1.46,0.05,2.91-0.15,4.35-0.34c1.83-0.24,3.67-0.49,5.5-0.73"/></g><g><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M17.41,58.48c2.25-0.39,4.57-0.79,6.8-0.3c1.27,0.28,2.49,0.84,3.79,0.86c1.47,0.02,2.85-0.64,4.28-0.98c1.92-0.46,3.98-0.32,5.82,0.39"/><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M52.25,59.04c0,0,1.86-1.58,6.77-0.54c2.55,0.54,5.22,1.04,7.77,0.47c1-0.22,1.95-0.64,2.95-0.85c1.1-0.22,2.23-0.19,3.35-0.16c1.82,0.06,3.65,0.11,5.47,0.17"/></g><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M16.86,74.52c3.06-2.02,7.19,0.29,10.79-0.42c1.65-0.33,3.13-1.29,4.78-1.59c2.03-0.37,4.08,0.29,6.13,0.54c1.27,0.16,2.55,0.15,3.83,0.15c1.33,0,2.67,0,4-0.01c4.51-0.01,9.05-0.02,13.46-0.94"/><g><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M16.2,88.99c2.29-0.88,4.72-1.74,7.14-1.36c2.32,0.37,4.48,1.86,6.81,1.56c0.94-0.12,1.82-0.54,2.71-0.87c1.99-0.75,4.11-1.12,6.23-1.08"/><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M66.48,89.34c1.28-1.45,3.48-1.59,5.39-1.3c1.91,0.29,3.83,0.9,5.73,0.55c1.18-0.21,2.26-0.79,3.44-0.99c2.5-0.43,5.23,0.81,7.54-0.26"/></g><path style="fill:none;stroke:#B0BEC5;stroke-width:3.0751;stroke-linecap:round;stroke-miterlimit:10;" d="M16.26,108.7c1.47-1.49,3.91-1.37,5.93-0.8s4.02,1.5,6.1,1.28c1.81-0.19,3.44-1.24,5.25-1.46c1.96-0.25,3.89,0.49,5.81,0.96c2.65,0.66,5.41,0.82,8.12,0.49"/><g><path style="fill:#FFECB3;" d="M45.62,107.74l2.49-13.17l1.71-9.07c0.34-2.32,0.32-3.26,1.33-4.69l7.33-10.4l22.41,15.79l-7.34,10.41c-0.6,0.86-1.89,1.72-3.96,2.82l-7.96,4.66l-11.57,6.78C47.86,112.03,45.26,110.2,45.62,107.74z"/><path style="fill:#616161;" d="M50.06,110.87l9.58-5.62c0,0-4.27,0.5-7.63-1.87s-4.33-6.56-4.33-6.56l-2.07,10.91C45.26,110.2,47.86,112.03,50.06,110.87z"/><path style="fill:#FFC107;" d="M103.19,40.45l-9.13-6.43L56.71,87.03c0,0-0.26,4,2.5,5.94c2.76,1.94,6.63,0.49,6.63,0.49L103.19,40.45z"/><path style="fill:#FFA000;" d="M109.83,45.13L73.49,96.69c-6.83,2.78-7.57-3.35-7.57-3.35l37.27-52.89L109.83,45.13z"/><path style="fill:#FDD835;" d="M94.06,34.01L56.79,86.9c0,0-8.12,1.41-5.6-6.15l36.23-51.42L94.06,34.01z"/><polygon style="fill:#F19534;" points="56.86,88.53 56.71,87.03 55.42,87.01 93.23,33.43 94.9,34.61"/><polygon style="fill:#D1762C;" points="65.84,93.46 64.31,93.85 101.41,41.2 103.09,42.38 66.28,94.62"/><path style="fill:#EF5350;" d="M93.01,21.41l6.56,13.77l15.84,2.02l7.55-10.49c1.94-2.75,1.71-7.07-5.57-12.2l-4.39-3.09c-6.29-4.44-10.51-3.24-12.45-0.5L93.01,21.41z"/><path style="fill:#94D1E0;" d="M112.22,44.5c-0.35,0.49-0.91,0.79-1.51,0.79c0,0-6.47-0.81-13.63-5.86c-7.17-5.05-10.21-10.65-10.21-10.65c-0.2-0.57-0.11-1.2,0.24-1.69l5.32-7.55c0.22-0.32,0.57-0.52,0.96-0.55c0.13-0.01,0.26-0.01,0.4-0.02c0.52-0.01,0.99,0.29,1.22,0.76c0,0,3.93,5.19,9.61,9.19c5.68,4,12.09,5.79,12.09,5.79c0.52,0.05,0.97,0.38,1.13,0.88c0,0,0,0.01,0,0.01c0.13,0.39,0.07,0.82-0.17,1.16L112.22,44.5z"/><ellipse transform="matrix(0.576 -0.8174 0.8174 0.576 35.4977 99.7629)" style="fill:#FF8383;" cx="113.92" cy="15.66" rx="3.39" ry="11.44"/><path style="fill:#B9E4EA;" d="M94.12,25.19c3.28,4.3,8.02,7.47,13.24,8.88c0.34,0.09,1.01,0.11,1.15-0.22c0.1-0.25,0-0.83-0.72-1.14c-2.6-1.12-5.6-3.04-9.57-6.62c-3.97-3.58-5.09-5.97-5.71-5.33C91.99,21.3,93.49,24.37,94.12,25.19z"/><path style="fill:#B9E4EA;" d="M99.04,32.54c1.04,0.6-0.25,2.28-3.85,0.43c-2.57-1.32-4.83-3.58-5.5-6.39c-0.08-0.33-0.13-1.14,0.2-1.43c1.05-0.92,1.38,0.79,3.53,3.03C95.08,29.92,96.94,31.34,99.04,32.54z"/></g></svg>
+        </div>
+        <div class="step-title">Subscribe</div>
+        <div class="step-desc">Enter a repo and your email</div>
+      </div>
+      <div class="step-connector" aria-hidden="true">─ ─</div>
+      <div class="step">
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 128 128" aria-hidden="true"><path style="fill:#FFFFFF;" d="M117.64,102.31H10.36c-2.74,0-3.83-1.71-3.83-3.83V29.52c0-2.12,1.71-3.83,3.83-3.83h107.27c2.12,0,3.83,1.71,3.83,3.83v68.96C121.47,100.6,119.75,102.31,117.64,102.31z"/><path style="fill:#6FBFF0;stroke:#6FBFF0;stroke-width:0.5;stroke-miterlimit:10;" d="M89.01,56.73l30.4-27.29c0.61-0.51,1.8-0.78,1.8-0.78s-1.39-1.52-3.22-0.09L70.26,66.44c-1.84,1.46-4.04,2.21-6.26,2.28c-2.22-0.07-4.42-0.82-6.26-2.28L10.01,28.57c-1.83-1.43-3.22,0.09-3.22,0.09s1.19,0.28,1.8,0.78l30.04,26.97L7.81,99.57c-0.53,0.59,0.92,1.55,1.59,0.9l33.66-40.09l12.37,11.1c2.44,2.19,5.5,3.32,8.58,3.39c3.08-0.07,6.13-1.2,8.58-3.39l12.29-11.04l33,40.02c0.67,0.65,2.12-0.31,1.59-0.9L89.01,56.73z"/><path style="fill:none;stroke:#6FBFF0;stroke-width:4;stroke-miterlimit:10;" d="M117.64,102.31H10.36c-2.74,0-3.83-1.71-3.83-3.83V29.52c0-2.12,1.71-3.83,3.83-3.83h107.27c2.12,0,3.83,1.71,3.83,3.83v68.96C121.47,100.6,119.75,102.31,117.64,102.31z"/></svg>
+        </div>
+        <div class="step-title">Confirm</div>
+        <div class="step-desc">Click the link in your inbox</div>
+      </div>
+      <div class="step-connector" aria-hidden="true">─ ─</div>
+      <div class="step">
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 128 128" aria-hidden="true"><path style="fill:#E2A610;" d="M53.32,18.8c0-7.09,5.77-12.86,12.86-12.86s12.86,5.77,12.86,12.86c0,7.09-5.77,12.86-12.86,12.86S53.32,25.9,53.32,18.8z M60.8,18.8c0,2.97,2.41,5.38,5.38,5.38c2.97,0,5.38-2.41,5.38-5.38c0-2.97-2.41-5.38-5.38-5.38C63.21,13.42,60.8,15.84,60.8,18.8z"/><path style="fill:#9E740B;" d="M77.24,12.28c0,0,0.57,2.27-2.06,3.51c-2.63,1.23-4.37,0.32-4.37,0.32c0.47,0.8,0.75,1.71,0.75,2.7c0,2.97-2.41,5.38-5.38,5.38c-2.97,0-5.38-2.41-5.38-5.38c0-0.3,0.07-1.43,0.55-2.37c-4.46,2.12-7.85,0.31-7.85,0.31c-0.11,0.67-0.18,1.36-0.18,2.06c0,7.09,5.77,12.86,12.86,12.86S79.04,25.9,79.04,18.8C79.04,16.42,78.38,14.19,77.24,12.28z"/><path style="fill:#FFCA28;" d="M10.46,97.8c6.77-6.65,10.99-8.89,12.71-18.53c1.72-9.64,0.34-29.95,7.92-43.25C38.01,23.84,50.71,18.8,63.1,18.8c0.3,0,0.6,0.02,0.9,0.02c0.3-0.01,0.6-0.02,0.9-0.02c12.39,0,25.09,5.04,32.01,17.21c7.57,13.31,6.2,33.62,7.92,43.25c1.72,9.64,5.94,11.88,12.71,18.53c2.92,2.87,6.45,7.44,6.46,10.38c0.01,2.94-1.49,4.01-5.06,5.51c-10.1,4.25-23.6,8.37-54.94,8.37s-44.84-4.12-54.94-8.37c-3.57-1.5-5.07-2.56-5.06-5.51C4.01,105.24,7.54,100.67,10.46,97.8z"/><path style="fill:#4E342E;" d="M113.7,108.38c0-4.43-22.25-8.02-49.7-8.02s-49.7,3.59-49.7,8.02s22.25,9.72,49.7,9.72S113.7,112.81,113.7,108.38z"/><path style="fill:#E2A610;" d="M93.84,44.79c0.37,1.41,0.68,2.82,0.93,4.2c1.27,7.06,1.04,14.3,1.61,21.45c0.77,9.57,2.47,14.61,6.34,19.11c0.51,0.59-0.01,1.5-0.78,1.38c-5.17-0.79-9.32-1.58-14.05-4.7c-7.06-4.65-8.8-13.4-8.85-21.26c-0.08-11.7,0.14-23.03-0.79-27.33c-1.29-5.99-2.49-9.18-4.45-12.09c-2.99-4.44,8.62,1.72,10.44,3.09C89.31,32.47,92.22,38.63,93.84,44.79z"/><path style="fill:#FFF59D;" d="M30.89,60.32c-0.12-7.58-0.06-15.42,2.96-22.38c1.81-4.16,4.88-7.91,8.8-10.24c3.08-1.83,9.34-3.85,11.59,0.3c0.45,0.83,0.63,1.8,0.66,2.75c0.08,3.31-1.64,6.37-3.31,9.23c-4.94,8.48-6.91,17.75-9.52,27.15c-1.07,3.88-2.43,7.75-4.76,11.03c-1.6,2.25-10.51,10.25-8.47,3.02C30.8,74.19,31,67.6,30.89,60.32z"/><path style="fill:#E2A610;" d="M73.09,106.82c-0.01-1.72-0.94-2.71-3.08-3.45c-4.44-1.53-10-1.25-13.24,0.49c-3.4,1.82-1.04,11.91,7.23,11.91S73.1,108.13,73.09,106.82z"/><path style="fill:#FFF59D;" d="M33.25,91.79c-8.78,1.54-15.14,4.87-17.89,7.57c-2.18,2.13-2.18,3.81,1.66,2.06c2.89-1.32,12.15-4,20.26-4.81c13.93-1.4,22.53-1.43,23.96-1.4c3.35,0.07,3.63-2.51-3.14-3.42C51.33,90.89,42.03,90.26,33.25,91.79z"/><path style="fill:#FFF59D;" d="M60.46,113.82c1.16,0.8,2.7,1.19,4,0.65c1.3-0.54,2.14-2.19,1.5-3.44c-0.25-0.49-0.68-0.86-1.11-1.2c-1.19-0.93-2.51-1.69-3.91-2.25c-0.55-0.22-1.13-0.42-1.73-0.38c-0.59,0.03-1.21,0.34-1.44,0.89C56.78,110.34,58.76,112.66,60.46,113.82z"/></svg>
+        </div>
+        <div class="step-title">Get notified</div>
+        <div class="step-desc">Email on every new release</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="footer-logo">repo<span class="see">see</span>tory</span>
+    <a class="footer-link" href="https://github.com/ananaslegend/reposeetory" target="_blank" rel="noopener" aria-label="View source on GitHub">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="#475569" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      ananaslegend/reposeetory
+    </a>
+  </footer>
+
+  <script>
+    document.getElementById('repo').addEventListener('blur', function () {
+      const val = this.value.trim();
+      const errorEl = document.getElementById('error-msg');
+      if (val && !/^[^/\s]+\/[^/\s]+$/.test(val)) {
+        errorEl.textContent = 'Format: owner/repository';
+      } else if (errorEl.textContent === 'Format: owner/repository') {
+        errorEl.textContent = '';
+      }
+    });
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const errorEl = document.getElementById('error-msg');
+      const repo = document.getElementById('repo').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      btn.disabled = true;
+      btn.textContent = 'Sending\u2026';
+      errorEl.textContent = '';
+
+      try {
+        const res = await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repository: repo, email }),
+        });
+
+        if (res.status === 202) {
+          window.location.href = '/subscribed';
+          return;
+        }
+
+        const messages = {
+          400: 'Invalid repository or email format.',
+          404: 'Repository not found on GitHub.',
+          409: 'This email is already subscribed to that repository.',
+        };
+        errorEl.textContent = messages[res.status] ?? 'Something went wrong. Please try again.';
+      } catch (_) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Subscribe repository \u2192';
+      }
+    }
+  </script>
+</body>
+</html>
