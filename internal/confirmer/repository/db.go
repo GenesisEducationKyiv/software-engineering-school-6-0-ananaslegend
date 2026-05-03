@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository implements confirmer.Repository using pgx.
@@ -51,7 +52,10 @@ func (r *Repository) GetConfirmationsWithLock(ctx context.Context, limit int) ([
 		}
 		items = append(items, c)
 	}
-	return items, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("confirmer.Repository.GetConfirmationsWithLock: rows.Err: %w", err)
+	}
+	return items, nil
 }
 
 // MarkSent sets sent_at = NOW() for the confirmation_notification with the given id.

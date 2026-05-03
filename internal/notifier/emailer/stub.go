@@ -3,8 +3,9 @@ package emailer
 import (
 	"context"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
 type StubMailer struct{}

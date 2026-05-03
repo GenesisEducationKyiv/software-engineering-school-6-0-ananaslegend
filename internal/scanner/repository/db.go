@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository implements scanner.Repository using pgx.
@@ -46,7 +47,10 @@ func (r *Repository) GetRepositoriesWithLock(ctx context.Context, limit int) ([]
 		}
 		repos = append(repos, repo)
 	}
-	return repos, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("scanner.Repository.GetRepositoriesWithLock: rows.Err: %w", err)
+	}
+	return repos, nil
 }
 
 // InsertNotifications inserts release_notifications rows for all confirmed subscribers of repoID.

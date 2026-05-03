@@ -4,11 +4,13 @@ package confirmer
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
@@ -88,7 +90,7 @@ func (c *Confirmer) Flush(ctx context.Context) {
 		err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 			items, err := c.repo.GetConfirmationsWithLock(ctx, confirmLimit)
 			if err != nil {
-				return err
+				return fmt.Errorf("confirmer.Confirmer.Flush: Repository.GetConfirmationsWithLock: %w", err)
 			}
 			if len(items) == 0 {
 				return nil
@@ -101,11 +103,11 @@ func (c *Confirmer) Flush(ctx context.Context) {
 			})
 			if err != nil {
 				c.m.emailsSent.WithLabelValues("error").Inc()
-				return err
+				return fmt.Errorf("confirmer.Confirmer.Flush: MailSender.SendConfirmation: %w", err)
 			}
 			c.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = c.repo.MarkSent(ctx, p.ID); err != nil {
-				return err
+				return fmt.Errorf("confirmer.Confirmer.Flush: Repository.MarkSent: %w", err)
 			}
 			processed = true
 			return nil

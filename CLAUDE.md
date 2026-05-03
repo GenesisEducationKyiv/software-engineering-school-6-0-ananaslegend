@@ -107,6 +107,42 @@ zerolog.Ctx(ctx).Info().Str("email", p.Email).Int64("repo_id", repoID).Msg("subs
 
 `RequestLogger` middleware в `httpapi/middleware.go` інжектує request-scoped logger з полями `request_id`, `method`, `path` у кожен запит.
 
+### Error wrapping
+
+**Кожна помилка обгортається — включно з помилками з internal-пакетів.** Wrap message має містити: назву пакету, назву структури/receiver-типу (якщо це метод), назву функції/методу, де помилка виникла. Це дає повний шлях у логах без stack trace.
+
+```go
+// функція в пакеті
+func runMigrations(...) error {
+    if err != nil {
+        return fmt.Errorf("app.runMigrations: iofs.New: %w", err)
+    }
+}
+
+// метод на структурі
+func (r *Repository) GetByConfirmToken(ctx context.Context, token string) (*domain.Subscription, error) {
+    if err != nil {
+        return nil, fmt.Errorf("subscription.Repository.GetByConfirmToken: %w", err)
+    }
+}
+
+// service шар викликає repository — wrap-ить теж
+func (s *Service) Confirm(ctx context.Context, token string) error {
+    sub, err := s.repo.GetByConfirmToken(ctx, token)
+    if err != nil {
+        return fmt.Errorf("subscription.Service.Confirm: %w", err)
+    }
+}
+```
+
+**Винятки** (налаштовані у `.golangci.yml` через `wrapcheck.ignore-sigs` + `ignore-interface-regexps`):
+- `fmt.Errorf`, `errors.New/Unwrap/Join` — не wrap-ити wrap.
+- `transactor.Transactor.WithinTransaction` — callback вже wrap-ить, повторний wrap створить double prefix.
+
+**Sentinel errors** (`domain.ErrTokenNotFound`, `ErrAlreadyExists` тощо) проходять наскрізь через `%w` — `errors.Is` у `httpapi/errors.go` бачить їх для error mapping → HTTP status.
+
+`wrapcheck` налаштований так, щоб ловити **всі** unwrapped помилки, навіть з internal-пакетів — `ignore-package-globs` свідомо НЕ містить власний модуль.
+
 ### Мoki
 Генеруються через `uber-go/mock`. Директива в `service.go`:
 ```go
@@ -419,22 +455,46 @@ r.Get("/swagger/*", httpswagger.Handler())
 ## Команди
 
 ```sh
-make build         # go build -o bin/api ./cmd/api
-make run           # go run ./cmd/api
-make test          # go test ./...
-make vet           # go vet ./...
-make generate      # go generate ./...
-make lint          # golangci-lint run ./...
-make tidy          # go mod tidy
-make migrate-up    # apply all migrations
-make migrate-down  # rollback last migration
-make clean         # rm -rf bin/
-make docker-up     # docker compose up --build -d
-make docker-down   # docker compose down
-make docker-clean  # docker compose down -v (видаляє volumes)
+make build              # go build -o bin/api ./cmd/api
+make run                # go run ./cmd/api
+make test               # go test ./...
+make vet                # go vet ./...
+make generate           # go generate ./...
+make lint               # golangci-lint run ./...
+make lint-install       # install pinned golangci-lint version
+make lint-fix           # go fix + golangci-lint run --fix
+make tidy               # go mod tidy + go mod vendor (атомарно)
+make mod-update         # go get -u ./... + tidy + vendor
+make mod-update-patch   # go get -u=patch ./... + tidy + vendor
+make migrate-up         # apply all migrations
+make migrate-down       # rollback last migration
+make clean              # rm -rf bin/
+make docker-up          # docker compose up --build -d
+make docker-down        # docker compose down
+make docker-clean       # docker compose down -v (видаляє volumes)
 ```
 
 `DB_URL` в Makefile можна перевизначити: `make migrate-up DB_URL=postgres://...`
+
+## Dependency updates
+
+Dependabot (`.github/dependabot.yml`) створює PR щотижня (понеділок 06:00 Kyiv) для двох ekosystem-ів:
+- `gomod` — групує всі minor/patch у один PR (`go-minor-patch`); major-релізи окремо.
+- `github-actions` — оновлення версій actions у workflow.
+
+**Cooldown:** 7 днів для всіх релізів, 30 днів для semver-major. Захист від supply-chain compromises (malicious release зазвичай yanked-ять за 24-48h).
+
+**Vendor sync на Dependabot PR:** Dependabot оновлює `go.mod`/`go.sum`, але **не** перегенерує `vendor/`. CI має step `Verify vendor is in sync` — він впаде на Dependabot PR. Workflow:
+
+```sh
+gh pr checkout <PR-number>   # checkout локально
+make tidy                    # go mod tidy + go mod vendor
+git add go.mod go.sum vendor/
+git commit -m "deps: sync vendor"
+git push
+```
+
+Після цього CI пройде. Альтернативно — auto-revendor workflow (не реалізовано — security trade-off з push-permissions на Dependabot branches).
 
 ## Тести
 

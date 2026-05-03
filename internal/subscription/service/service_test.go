@@ -10,11 +10,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.uber.org/mock/gomock"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service/mocks"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func newSvc(t *testing.T) (*service.Service, *mocks.MockRepository, *mocks.MockRemoteRepositoryProvider) {

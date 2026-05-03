@@ -109,7 +109,7 @@ func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error
 		UnsubscribeToken:      unsubscribeToken,
 	})
 	if err != nil {
-		return err // ErrAlreadyExists propagated as-is
+		return fmt.Errorf("subscription.Service.Subscribe: Repository.CreateSubscription: %w", err)
 	}
 
 	zerolog.Ctx(ctx).Info().
@@ -124,7 +124,7 @@ func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error
 func (s *Service) Confirm(ctx context.Context, token string) error {
 	sub, err := s.repo.GetByConfirmToken(ctx, token)
 	if err != nil {
-		return err
+		return fmt.Errorf("subscription.Service.Confirm: Repository.GetByConfirmToken: %w", err)
 	}
 
 	now := time.Now()

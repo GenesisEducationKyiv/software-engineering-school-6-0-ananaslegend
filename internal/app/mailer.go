@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
@@ -23,7 +25,7 @@ func newEmailer(cfg config.Config, log zerolog.Logger) (emailer.Emailer, error) 
 			TLSPolicy: cfg.SMTPTLSPolicy,
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("app.newEmailer: emailer.NewSMTPMailer: %w", err)
 		}
 		log.Info().Msg("mailer: smtp")
 		return mailer, nil
