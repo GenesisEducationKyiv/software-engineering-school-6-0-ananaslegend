@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
 func newTestClient(t *testing.T, handler http.HandlerFunc) *Client {

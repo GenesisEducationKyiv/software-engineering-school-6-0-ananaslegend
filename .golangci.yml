@@ -1,7 +1,79 @@
 version: "2"
 
+run:
+  timeout: 5m
+  tests: true
+
 linters:
+  default: standard
+  enable:
+    - bodyclose
+    - gosec
+    - revive
+    - misspell
+    - unconvert
+    - unparam
+    - prealloc
+    - nilerr
+    - errorlint
+    - copyloopvar
+    - gocritic
+    - wrapcheck
   settings:
+    govet:
+      enable:
+        - inline # Go 1.26 //go:fix inline directives
     errcheck:
       exclude-functions:
         - (io.Closer).Close
+    revive:
+      rules:
+        - name: var-naming
+        - name: exported
+          disabled: true
+    gosec:
+      excludes:
+        - G104 # handled by errcheck
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+        - .Wrap(
+        - .Wrapf(
+        - .WithMessage(
+        - .WithMessagef(
+        - .WithStack(
+      ignore-interface-regexps:
+        - ^transactor\.Transactor$
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+          - unparam
+          - wrapcheck
+      - path: docs/
+        linters:
+          - revive
+          - misspell
+          - gocritic
+      - path: mocks/
+        linters:
+          - revive
+          - unparam
+    paths:
+      - vendor
+      - docs
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ananaslegend/reposeetory

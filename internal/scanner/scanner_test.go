@@ -6,16 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.uber.org/mock/gomock"
+
+	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
+
+	"github.com/stretchr/testify/require"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/scanner"
 	"github.com/ananaslegend/reposeetory/internal/scanner/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/stretchr/testify/require"
 )
 
 func newScanner(t *testing.T) (*scanner.Scanner, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockReleaseProvider) {

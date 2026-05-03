@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/ananaslegend/reposeetory/internal/notifier"
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository implements notifier.Repository using pgx.
@@ -50,7 +51,10 @@ func (r *Repository) GetNotificationsWithLock(ctx context.Context, limit int) ([
 		}
 		items = append(items, n)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("notifier.Repository.GetNotificationsWithLock: rows.Err: %w", err)
+	}
+	return items, nil
 }
 
 // MarkSent sets sent_at = NOW() for the notification with the given id.

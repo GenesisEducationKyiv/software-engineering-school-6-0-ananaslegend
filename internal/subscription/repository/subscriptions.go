@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
 const uniqueViolationCode = "23505"
