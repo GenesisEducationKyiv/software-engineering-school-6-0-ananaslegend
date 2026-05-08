@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	httpswagger "github.com/swaggo/http-swagger/v2"
 
-	_ "github.com/ananaslegend/reposeetory/docs"
+	_ "github.com/ananaslegend/reposeetory/docs/swagger"
 	subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 )
 

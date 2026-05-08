@@ -38,7 +38,7 @@ migrate-down:
 	migrate -path $(MIGRATIONS_PATH) -database "$(DB_URL)" down 1
 
 swagger:
-	swag init -g cmd/api/main.go -o docs --parseDependency
+	swag init -g cmd/api/main.go -o docs/swagger --parseDependency
 
 clean:
 	rm -rf bin/
