@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -47,7 +48,7 @@ func Load() (Config, error) {
 
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("config.Load: envconfig.Process: %w", err)
 	}
 	return cfg, nil
 }

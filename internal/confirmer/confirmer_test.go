@@ -6,15 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.uber.org/mock/gomock"
 
+	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
-	"github.com/stretchr/testify/require"
 )
 
 func newConfirmer(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockMailSender) {

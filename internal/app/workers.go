@@ -4,10 +4,11 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ananaslegend/reposeetory/internal/notifier/emailer"
-	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ananaslegend/reposeetory/internal/notifier/emailer"
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
@@ -35,8 +36,7 @@ func runWorkers(
 		Interval: cfg.ScannerInterval,
 		Registry: reg,
 	})
-	wg.Add(1)
-	go func() { defer wg.Done(); scan.Run(ctx) }()
+	wg.Go(func() { ; scan.Run(ctx) })
 
 	notify := notifier.New(notifier.Config{
 		Tx:       txr,
@@ -46,8 +46,7 @@ func runWorkers(
 		BaseURL:  cfg.AppBaseURL,
 		Registry: reg,
 	})
-	wg.Add(1)
-	go func() { defer wg.Done(); notify.Run(ctx) }()
+	wg.Go(func() { ; notify.Run(ctx) })
 
 	confirm := confirmer.New(confirmer.Config{
 		Tx:       txr,
@@ -57,6 +56,5 @@ func runWorkers(
 		BaseURL:  cfg.AppBaseURL,
 		Registry: reg,
 	})
-	wg.Add(1)
-	go func() { defer wg.Done(); confirm.Run(ctx) }()
+	wg.Go(func() { ; confirm.Run(ctx) })
 }

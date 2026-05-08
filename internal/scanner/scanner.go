@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
@@ -98,12 +99,12 @@ func (s *Scanner) Tick(ctx context.Context) error {
 			latestTag := tags[repo.ID]
 
 			if err = s.repo.UpsertLastSeen(ctx, repo.ID, latestTag); err != nil {
-				return err
+				return fmt.Errorf("scanner.Scanner.Tick: Repository.UpsertLastSeen: %w", err)
 			}
 
 			if shouldNotify(repo, latestTag) {
 				if err = s.repo.InsertNotifications(ctx, repo.ID, latestTag); err != nil {
-					return err
+					return fmt.Errorf("scanner.Scanner.Tick: Repository.InsertNotifications: %w", err)
 				}
 			}
 		}
@@ -117,7 +118,7 @@ func (s *Scanner) Tick(ctx context.Context) error {
 			return nil
 		}
 		s.m.ticksTotal.WithLabelValues("error").Inc()
-		return err
+		return fmt.Errorf("scanner.Scanner.Tick: %w", err)
 	}
 	s.m.ticksTotal.WithLabelValues("ok").Inc()
 	return nil

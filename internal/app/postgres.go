@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ananaslegend/reposeetory/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ananaslegend/reposeetory/internal/config"
 )
 
 func newPostgresDatabase(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {

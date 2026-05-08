@@ -7,8 +7,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
 )

@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ananaslegend/reposeetory/pkg/transactor"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
@@ -93,7 +94,7 @@ func (n *Notifier) Flush(ctx context.Context) {
 		err := n.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 			items, err := n.repo.GetNotificationsWithLock(ctx, notifyLimit)
 			if err != nil {
-				return err
+				return fmt.Errorf("notifier.Notifier.Flush: Repository.GetNotificationsWithLock: %w", err)
 			}
 			if len(items) == 0 {
 				return nil
@@ -109,11 +110,11 @@ func (n *Notifier) Flush(ctx context.Context) {
 			})
 			if sendErr != nil {
 				n.m.emailsSent.WithLabelValues("error").Inc()
-				return sendErr
+				return fmt.Errorf("notifier.Notifier.Flush: MailSender.SendRelease: %w", sendErr)
 			}
 			n.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = n.repo.MarkSent(ctx, p.ID); err != nil {
-				return err
+				return fmt.Errorf("notifier.Notifier.Flush: Repository.MarkSent: %w", err)
 			}
 			processed = true
 			return nil

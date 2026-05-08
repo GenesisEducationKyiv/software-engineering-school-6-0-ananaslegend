@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -61,7 +62,11 @@ func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLat
 	if err != nil {
 		log.Warn().Err(err).Msg("redis mget failed, falling back to github")
 		c.m.errors.Inc()
-		return c.wrapped.GetLatestReleases(ctx, p)
+		fresh, err := c.wrapped.GetLatestReleases(ctx, p)
+		if err != nil {
+			return nil, fmt.Errorf("github.CachingReleaseProvider.GetLatestReleases: ReleaseProvider.GetLatestReleases (redis fallback): %w", err)
+		}
+		return fresh, nil
 	}
 
 	result := make(map[int64]string)
@@ -86,7 +91,7 @@ func (c *CachingReleaseProvider) GetLatestReleases(ctx context.Context, p GetLat
 
 	fresh, err := c.wrapped.GetLatestReleases(ctx, GetLatestReleasesParams{Repos: misses})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("github.CachingReleaseProvider.GetLatestReleases: ReleaseProvider.GetLatestReleases: %w", err)
 	}
 
 	var toCache []domain.GitHubRepo
