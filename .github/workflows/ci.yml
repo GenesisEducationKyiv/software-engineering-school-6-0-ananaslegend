@@ -33,7 +33,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: 2.12.2
           args: --timeout=5m
         env:
           GOFLAGS: -mod=vendor
