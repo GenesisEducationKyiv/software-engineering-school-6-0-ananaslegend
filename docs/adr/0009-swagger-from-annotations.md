@@ -53,19 +53,24 @@ flowchart LR
 
 ## Consequences
 
+### Positive
 - API docs live next to the code they describe; less drift than a
   parallel YAML contract.
 - A handler signature change cannot silently break docs — `swag init`
   fails if annotations and types disagree.
-- `docs/swagger/` is a generated artefact in git. Diff noise on every
-  endpoint change is the cost of reproducible builds. CI must verify
-  the directory is in sync, mirroring the vendor-sync check.
+
+### Negative
 - Locked to OpenAPI 2.0 — `swaggo/swag` mainline does not target 3.x.
   Acceptable for now; migrating later means swapping the generator,
   not rewriting handlers.
 - Annotation syntax is vendor-specific and not validated by the Go
   compiler or IDE; typos surface only at `swag init` time. Mitigated
   by running generation in CI.
+
+### Constraints
+- `docs/swagger/` is a generated artefact in git. Diff noise on every
+  endpoint change is the cost of reproducible builds. CI must verify
+  the directory is in sync, mirroring the vendor-sync check.
 - `swag` CLI is a manual prerequisite (`go install`), not vendored.
   Open question: a `make swagger-install` target to automate this.
 

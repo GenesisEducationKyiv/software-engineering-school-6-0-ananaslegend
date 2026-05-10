@@ -46,19 +46,24 @@ renderer lives in `internal/subscription/http/pages/`:
 
 ## Consequences
 
+### Positive
 - One binary ships everything — no separate frontend build, no asset
   pipeline, no CDN dependency.
 - Pages load fast: no JS to download or execute, no hydration step.
 - Accessibility by default: semantic HTML, no SPA routing weirdness.
-- Server roundtrip on every navigation. Acceptable — traffic is low,
-  pages are static, and a typical visit touches one or two of them.
-- Changing a token (colour, font) requires touching every template
-  that inlines CSS. Acceptable at this size; the shared `<style>`
-  block in `base.html` already covers four of six pages.
 - `POST /api/subscribe` stays JSON — the API layer is still a JSON
   HTTP API; only the GET pages are HTML. Mixing is intentional and
   reflects the two distinct audiences (programmatic clients vs.
   browsers).
+
+### Negative
+- Server roundtrip on every navigation. Acceptable — traffic is low,
+  pages are static, and a typical visit touches one or two of them.
+
+### Constraints
+- Changing a token (colour, font) requires touching every template
+  that inlines CSS. Acceptable at this size; the shared `<style>`
+  block in `base.html` already covers four of six pages.
 
 ## Links
 

@@ -39,6 +39,7 @@ by structural typing.
 
 ## Consequences
 
+### Positive
 - No import cycles between features — each feature stands alone, the
   composition root in `internal/app/` pulls them together.
 - Interface segregation by default: each consumer's interface contains
@@ -48,6 +49,8 @@ by structural typing.
 - Mocks live next to the consumer (`internal/<feature>/mocks/`) and
   are generated from the consumer-side interface — a producer change
   that doesn't affect the consumer's surface never invalidates a mock.
+
+### Negative
 - Onboarding cost: contributors familiar with Java/C# expect
   interfaces in the producer package and will instinctively put them
   there. Caught in code review and documented here.

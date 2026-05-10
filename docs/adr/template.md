@@ -15,10 +15,17 @@ recognise the pattern in the codebase. Imperative mood.>
 
 ## Consequences
 
+Group consequences under the subsections below. Omit any subsection
+that has no bullets.
+
+### Positive
 - <positive consequence>
-- <positive consequence>
-- <negative consequence or trade-off — and how we mitigate it>
-- <constraint this decision imposes on future work>
+
+### Negative
+- <negative consequence or trade-off>
+
+### Constraints
+- <constraint future work must respect>
 
 ## Links
 

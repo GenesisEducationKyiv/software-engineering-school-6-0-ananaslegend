@@ -37,12 +37,17 @@ too. Exceptions are kept narrow:
 
 ## Consequences
 
+### Positive
 - Logs read like a breadcrumb trail; no stack traces needed to find
   the call path.
 - Sentinel-based HTTP mapping in `httpapi/errors.go` keeps working —
   `%w` lets `errors.Is` traverse the wrapped chain.
+
+### Negative
 - Verbose, especially in short forwarding methods. Accepted as the
   cost of not pulling in a stack-trace library.
+
+### Constraints
 - New contributors must learn the format; `wrapcheck` flags violations
   in CI before review.
 - `wrapcheck.ignore-sigs` and `ignore-interface-regexps` must stay in

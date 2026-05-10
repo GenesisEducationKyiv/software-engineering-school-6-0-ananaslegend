@@ -18,11 +18,16 @@ calls go through interfaces defined on the consumer side.
 
 ## Consequences
 
+### Positive
 - Top-level reads as a product TOC: *subscribe, scan, notify, confirm.*
 - Feature change touches one folder.
 - A feature is extractable into a separate service by moving its folder
   and rewiring `internal/app/`.
+
+### Negative
 - Some duplication across features (each owns its repository and HTTP
   layer).
+
+### Constraints
 - Requires consumer-side interfaces to avoid import cycles — a
   convention contributors must learn.

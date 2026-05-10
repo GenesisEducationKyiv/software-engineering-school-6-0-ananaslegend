@@ -57,19 +57,24 @@ sequenceDiagram
 
 ## Consequences
 
+### Positive
 - Repository methods are written once; same code path with or without a
   surrounding transaction.
 - Service is the only layer that decides on transaction boundaries —
   matches where business invariants live.
 - Single wiring point: `txr := transactor.New(pool)` in
   `internal/app/`, passed into every feature `Config`.
-- Trade-off: transactions become **implicit** — a reader must trust
-  that callers passed the right `ctx`. Mitigated by `wrapcheck` rule
-  ignoring `WithinTransaction` to avoid double-wrap, and by the
-  convention that *every* repository takes `ctx` as its first arg.
-- Trade-off: uses `context.Value`, which Go discourages for non-request
-  data. Acceptable here because the lifetime is exactly the request and
-  the key is unexported (`dbKey{}`).
+
+### Negative
+- Uses `context.Value`, which Go discourages for non-request data.
+  Acceptable here because the lifetime is exactly the request and the
+  key is unexported (`dbKey{}`).
+
+### Constraints
+- Transactions become **implicit** — a reader must trust that callers
+  passed the right `ctx`. Mitigated by `wrapcheck` rule ignoring
+  `WithinTransaction` to avoid double-wrap, and by the convention that
+  *every* repository takes `ctx` as its first arg.
 
 ## Links
 

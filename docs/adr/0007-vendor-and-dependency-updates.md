@@ -48,20 +48,25 @@ flowchart LR
 
 ## Consequences
 
+### Positive
 - Reproducible Docker builds with no network access — survives the
   corporate proxy and offline environments.
 - Dependency code is at least 7 days old when it lands; the typical
   malicious-release yank window has already passed.
 - One grouped PR per ecosystem each week instead of dozens of
   per-package bumps; reviewers see all changes in one place.
+
+### Negative
 - `vendor/` adds tens of MB to the repo; accepted as the cost of
   reproducible offline builds.
+- Security patches land ~7 days slower. For a genuinely critical CVE
+  the cooldown can be bypassed by a manual PR.
+
+### Constraints
 - Dependabot does **not** regenerate `vendor/`. Each Dependabot PR
   must be checked out locally, `make tidy` run, and `vendor/`
   re-committed. CI step `Verify vendor is in sync` fails the PR until
   this is done.
-- Security patches land ~7 days slower. For a genuinely critical CVE
-  the cooldown can be bypassed by a manual PR.
 
 ## Links
 

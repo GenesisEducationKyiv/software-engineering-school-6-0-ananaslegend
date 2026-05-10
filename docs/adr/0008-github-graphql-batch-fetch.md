@@ -60,19 +60,24 @@ only when `REDIS_URL` is configured.
 
 ## Consequences
 
+### Positive
 - O(1) HTTP requests per tick instead of O(N). Latency stays flat as
   subscriptions grow.
 - One rate-limit charge per tick — predictable cost, easy to fit
   inside the 5000-point/h authenticated budget.
 - No traffic spikes; GitHub sees one steady request per
   `SCANNER_INTERVAL`.
-- `GITHUB_TOKEN` is mandatory. REST allows some unauthenticated calls;
-  GraphQL does not. The scanner logs a warning and skips startup if
-  the token is missing.
+
+### Negative
 - Query construction and response parsing are heavier than REST URL
   building. Mitigated by isolating GraphQL details in
   `internal/github/`; the rest of the codebase sees a flat
   `ReleaseProvider` interface returning a `map[repoID]tag`.
+
+### Constraints
+- `GITHUB_TOKEN` is mandatory. REST allows some unauthenticated calls;
+  GraphQL does not. The scanner logs a warning and skips startup if
+  the token is missing.
 - Mocking in tests needs an `httptest.Server` returning shaped
   GraphQL JSON, not URL-match stubs. Done once in `client_test.go`;
   scanner-level tests use `StubClient` instead.

@@ -50,12 +50,15 @@ sequenceDiagram
 
 ## Consequences
 
+### Positive
 - Atomic with the business write — the email is committed iff the
   subscription is.
 - Survives process restarts; the drainer retries any row where
   `sent_at IS NULL`.
 - `SKIP LOCKED` lets multiple workers drain the same table without a
   distributed lock — horizontal scaling without coordination.
+
+### Negative
 - Email delivery is delayed by the drain interval (`30s` default).
 - Two extra tables and migrations to maintain.
 - No dead-letter handling — a permanently failing row retries forever.

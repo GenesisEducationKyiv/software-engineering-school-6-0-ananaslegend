@@ -45,18 +45,23 @@ the consumer; run the real thing for stateful or SQL-heavy systems.**
 
 ## Consequences
 
+### Positive
 - Real-Postgres tests catch SQL, migration, and constraint bugs that
   mock-DB approaches silently let through.
 - `miniredis` keeps Redis-aware tests in the unit-test budget —
   milliseconds per case, no Docker.
-- Generated mocks (`mocks/mock_interfaces.go`) must be regenerated on
-  every consumer-interface change; CI catches stale mocks via a
-  compilation failure. `make generate` is the single entry point.
+
+### Negative
 - Onboarding cost: contributors must learn *which* double to use at
   *which* layer. The decision tree in this ADR replaces scattered
   tribal knowledge.
 - No end-to-end "spin up the binary" tests — covered by smoke checks
   in higher environments, out of scope for this ADR.
+
+### Constraints
+- Generated mocks (`mocks/mock_interfaces.go`) must be regenerated on
+  every consumer-interface change; CI catches stale mocks via a
+  compilation failure. `make generate` is the single entry point.
 
 ## Links
 

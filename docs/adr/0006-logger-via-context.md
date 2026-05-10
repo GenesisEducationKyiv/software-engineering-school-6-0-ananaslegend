@@ -38,15 +38,20 @@ No function takes a `*zerolog.Logger` parameter.
 
 ## Consequences
 
+### Positive
 - Function signatures stay clean — `ctx` is already there.
 - Request fields propagate automatically into every nested call.
+
+### Negative
 - Implicit dependency on `ctx` carrying a logger. Mitigated:
   `zerolog.Ctx` returns a disabled no-op logger if none is attached,
   so missing setup never panics — log lines just vanish.
-- Tests must attach a test logger to `ctx` to assert log output;
-  otherwise lines silently disappear into the no-op.
 - Same trade-off as ADR-0003 (`Transactor`): we accept implicit-via-
   context for the API-ergonomics win.
+
+### Constraints
+- Tests must attach a test logger to `ctx` to assert log output;
+  otherwise lines silently disappear into the no-op.
 
 ## Links
 
