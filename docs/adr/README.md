@@ -20,6 +20,8 @@ This directory contains Architecture Decision Records (ADRs) for the
 | 0009 | [Generate API documentation from code annotations with `swaggo/swag`](0009-swagger-from-annotations.md) | http | accepted | 2026-05-09 |
 | 0010 | [Server-rendered HTML with embedded templates, no JS framework](0010-server-rendered-html-no-js.md) | http | accepted | 2026-05-09 |
 | 0011 | [Testing strategy — mock interfaces, run real for stateful systems](0011-testing-strategy.md) | testing | accepted | 2026-05-09 |
+| 0012 | [Host the service on Railway](0012-host-on-railway.md)                 | infra           | accepted | 2026-05-10 |
+| 0013 | [Use Resend as the email provider](0013-resend-email-provider.md)      | integrations    | accepted | 2026-05-10 |
 
 ## Conventions
 
@@ -50,7 +52,7 @@ describes the *artefact*, not the *motivation*.
 | `reliability`   | Outbox, retries, async delivery, idempotency.                          |
 | `observability` | Logs, metrics, error context.                                          |
 | `http`          | HTTP API surface, docs, rendering.                                     |
-| `infra`         | Build, vendor, Docker, CI.                                             |
+| `infra`         | Build, vendor, Docker, CI, deployment / hosting platform.              |
 | `integrations`  | External services (GitHub, SMTP, ...).                                 |
 | `security`      | Auth, secrets, hardening. *(aspirational — no ADR yet)*                |
 | `testing`       | Test strategy, mocks.                                                  |
