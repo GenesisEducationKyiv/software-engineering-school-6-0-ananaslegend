@@ -49,6 +49,15 @@ flowchart LR
     end
 ```
 
+On top of this client we wrap a Redis caching decorator
+(`CachingReleaseProvider` in `internal/github/caching_client.go`) that
+collapses repeated GraphQL calls within a 10-minute window — `MGET`
+for reads, a pipeline `SET` for writes. If Redis is unreachable the
+decorator falls back silently to the wrapped GraphQL client; the
+cache is an optimisation, not a hard dependency. Wiring lives in
+`internal/app/`: the bare GraphQL client is decorated with caching
+only when `REDIS_URL` is configured.
+
 ## Consequences
 
 - O(1) HTTP requests per tick instead of O(N). Latency stays flat as
