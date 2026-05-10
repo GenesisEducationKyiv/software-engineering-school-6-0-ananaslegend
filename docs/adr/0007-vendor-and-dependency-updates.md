@@ -1,4 +1,4 @@
-# ADR-0006: Vendor dependencies and batch weekly updates with cooldown
+# ADR-0007: Vendor dependencies and batch weekly updates with cooldown
 
 Status: accepted · 2026-05-09 · @ananaslegend · security
 

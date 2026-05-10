@@ -1,4 +1,4 @@
-# ADR-0003: Transactions via context (`Transactor`)
+# ADR-0004: Transactions via context (`Transactor`)
 
 Status: accepted · 2026-05-09 · @ananaslegend · persistence
 

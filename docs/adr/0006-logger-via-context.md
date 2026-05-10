@@ -1,4 +1,4 @@
-# ADR-0005: Inject the logger through context
+# ADR-0006: Inject the logger through context
 
 Status: accepted · 2026-05-09 · @ananaslegend · observability
 

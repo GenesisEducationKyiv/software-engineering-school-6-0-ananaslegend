@@ -1,4 +1,4 @@
-# ADR-0004: Wrap every error with package and method context
+# ADR-0005: Wrap every error with package and method context
 
 Status: accepted · 2026-05-09 · @ananaslegend · observability
 
