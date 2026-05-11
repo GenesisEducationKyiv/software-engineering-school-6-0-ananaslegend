@@ -55,7 +55,7 @@ func Run(ctx context.Context) {
 	var cronsWG sync.WaitGroup
 	runWorkers(ctx, &cronsWG, cfg, txr, pool, mailSender, releaseProvider, metricRegistry)
 
-	srv := newHTTPServer(cfg, pool, log, metricRegistry)
+	srv := newHTTPServer(cfg, pool, txr, log, metricRegistry)
 
 	go func() {
 		log.Info().Str("addr", cfg.HTTPAddr).Msg("server listening")
