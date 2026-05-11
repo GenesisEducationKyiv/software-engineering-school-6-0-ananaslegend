@@ -72,7 +72,9 @@ flowchart LR
   endpoint change is the cost of reproducible builds. CI must verify
   the directory is in sync, mirroring the vendor-sync check.
 - `swag` CLI is a manual prerequisite (`go install`), not vendored.
-  Open question: a `make swagger-install` target to automate this.
+  Version is pinned via `SWAG_VERSION` in `Makefile`; `make
+  swagger-install` installs it locally, CI installs the same version
+  inline before the in-sync check.
 
 ## Links
 

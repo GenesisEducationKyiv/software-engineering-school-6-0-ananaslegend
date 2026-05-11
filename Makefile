@@ -2,8 +2,9 @@ BINARY                = bin/api
 MIGRATIONS_PATH       = ./migrations
 DB_URL               ?= postgres://postgres:pass@localhost:5432/postgres?sslmode=disable
 GOLANGCI_LINT_VERSION = latest
+SWAG_VERSION          = v1.16.6
 
-.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger
+.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install
 
 build:
 	go build -mod=vendor -o $(BINARY) ./cmd/api
@@ -36,6 +37,9 @@ migrate-up:
 
 migrate-down:
 	migrate -path $(MIGRATIONS_PATH) -database "$(DB_URL)" down 1
+
+swagger-install:
+	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
 
 swagger:
 	swag init -g cmd/api/main.go -o docs/swagger --parseDependency
