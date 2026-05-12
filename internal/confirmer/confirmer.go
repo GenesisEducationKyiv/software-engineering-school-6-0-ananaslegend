@@ -98,7 +98,7 @@ func (c *Confirmer) Flush(ctx context.Context) {
 			p := items[0]
 			err = c.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
 				To:           p.Email,
-				ConfirmURL:   c.baseURL + "/api/confirm/" + p.ConfirmToken,
+				ConfirmURL:   ConfirmURL(c.baseURL, p.ConfirmToken),
 				RepoFullName: p.RepoOwner + "/" + p.RepoName,
 			})
 			if err != nil {
