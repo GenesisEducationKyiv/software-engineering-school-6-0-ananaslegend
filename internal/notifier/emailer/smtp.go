@@ -58,47 +58,41 @@ func NewSMTPMailer(cfg SMTPMailerConfig) (*SMTPMailer, error) {
 }
 
 func (m *SMTPMailer) SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error {
-	msg := mail.NewMsg()
-	if err := msg.From(m.from); err != nil {
-		return fmt.Errorf("set from: %w", err)
+	email, err := renderConfirmation(p)
+	if err != nil {
+		return fmt.Errorf("emailer.SMTPMailer.SendConfirmation: %w", err)
 	}
-	if err := msg.To(p.To); err != nil {
-		return fmt.Errorf("set to: %w", err)
-	}
-	msg.Subject(fmt.Sprintf("Confirm your subscription to %s", p.RepoFullName))
-
-	if err := msg.SetBodyHTMLTemplate(confirmationHTMLTmpl, p); err != nil {
-		return fmt.Errorf("render confirmation html: %w", err)
-	}
-	if err := msg.AddAlternativeTextTemplate(confirmationTXTTmpl, p); err != nil {
-		return fmt.Errorf("render confirmation txt: %w", err)
-	}
-
-	if err := m.client.DialAndSend(msg); err != nil {
-		return fmt.Errorf("send confirmation email: %w", err)
+	if err := m.send(ctx, p.To, email); err != nil {
+		return fmt.Errorf("emailer.SMTPMailer.SendConfirmation: %w", err)
 	}
 	return nil
 }
 
 func (m *SMTPMailer) SendRelease(ctx context.Context, p domain.SendReleaseParams) error {
+	email, err := renderRelease(p)
+	if err != nil {
+		return fmt.Errorf("emailer.SMTPMailer.SendRelease: %w", err)
+	}
+	if err := m.send(ctx, p.To, email); err != nil {
+		return fmt.Errorf("emailer.SMTPMailer.SendRelease: %w", err)
+	}
+	return nil
+}
+
+func (m *SMTPMailer) send(ctx context.Context, to string, email renderedEmail) error {
 	msg := mail.NewMsg()
 	if err := msg.From(m.from); err != nil {
 		return fmt.Errorf("set from: %w", err)
 	}
-	if err := msg.To(p.To); err != nil {
+	if err := msg.To(to); err != nil {
 		return fmt.Errorf("set to: %w", err)
 	}
-	msg.Subject(fmt.Sprintf("New release %s for %s", p.ReleaseTag, p.RepoFullName))
+	msg.Subject(email.Subject)
+	msg.SetBodyString(mail.TypeTextHTML, email.HTML)
+	msg.AddAlternativeString(mail.TypeTextPlain, email.Text)
 
-	if err := msg.SetBodyHTMLTemplate(releaseHTMLTmpl, p); err != nil {
-		return fmt.Errorf("render release html: %w", err)
-	}
-	if err := msg.AddAlternativeTextTemplate(releaseTXTTmpl, p); err != nil {
-		return fmt.Errorf("render release txt: %w", err)
-	}
-
-	if err := m.client.DialAndSend(msg); err != nil {
-		return fmt.Errorf("send release email: %w", err)
+	if err := m.client.DialAndSendWithContext(ctx, msg); err != nil {
+		return fmt.Errorf("dial and send: %w", err)
 	}
 	return nil
 }
