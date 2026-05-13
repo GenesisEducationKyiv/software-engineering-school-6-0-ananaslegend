@@ -1,4 +1,4 @@
-//go:generate swag init -g cmd/api/main.go -o docs --parseDependency
+//go:generate swag init -g cmd/api/main.go -o docs/swagger --parseDependency
 
 // @title			Reposeetory API
 // @version			1.0
