@@ -189,6 +189,43 @@ func (s *SubscriptionSuite) setConfirmTokenExpired(subID int64, expiresAt time.T
 	require.NoError(s.T(), err)
 }
 
+func (s *SubscriptionSuite) getUnsubscribeTokenForEmail(email string) string {
+	s.T().Helper()
+	var token string
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx,
+		`SELECT unsubscribe_token FROM subscriptions WHERE email = $1`, email,
+	).Scan(&token))
+	require.NotEmpty(s.T(), token)
+	return token
+}
+
+func (s *SubscriptionSuite) countSubscriptionsByEmail(email string) int {
+	s.T().Helper()
+	var n int
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx,
+		`SELECT count(*) FROM subscriptions WHERE email = $1`, email,
+	).Scan(&n))
+	return n
+}
+
+func (s *SubscriptionSuite) countReleaseNotifications(subID int64) int {
+	s.T().Helper()
+	var n int
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx,
+		`SELECT count(*) FROM release_notifications WHERE subscription_id = $1`, subID,
+	).Scan(&n))
+	return n
+}
+
+func (s *SubscriptionSuite) insertReleaseNotification(subID, repoID int64, tag string) {
+	s.T().Helper()
+	_, err := s.pg.Pool.Exec(s.ctx,
+		`INSERT INTO release_notifications (subscription_id, repository_id, release_tag) VALUES ($1, $2, $3)`,
+		subID, repoID, tag,
+	)
+	require.NoError(s.T(), err)
+}
+
 // --- Metrics ---
 
 // assertCounter sums every observed sample of the named counter in the suite's
@@ -219,4 +256,9 @@ func (s *SubscriptionSuite) assertCreatedCounter(want float64) {
 func (s *SubscriptionSuite) assertConfirmedCounter(want float64) {
 	s.T().Helper()
 	s.assertCounter("subscriptions_confirmed_total", want)
+}
+
+func (s *SubscriptionSuite) assertDeletedCounter(want float64) {
+	s.T().Helper()
+	s.assertCounter("subscriptions_deleted_total", want)
 }
