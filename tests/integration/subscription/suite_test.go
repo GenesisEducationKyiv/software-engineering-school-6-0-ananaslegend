@@ -88,6 +88,15 @@ func (s *SubscriptionSuite) decodeJSON(resp *http.Response, v any) {
 	require.NoError(s.T(), json.NewDecoder(resp.Body).Decode(v))
 }
 
+func (s *SubscriptionSuite) get(path string) *http.Response {
+	s.T().Helper()
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet, s.app.Server.URL+path, nil)
+	require.NoError(s.T(), err)
+	resp, err := s.app.Client.Do(req)
+	require.NoError(s.T(), err)
+	return resp
+}
+
 func (s *SubscriptionSuite) randomEmail() string {
 	return gofakeit.Email()
 }
@@ -160,24 +169,54 @@ func (s *SubscriptionSuite) selectRepository(owner, name string) (int64, bool) {
 	return id, true
 }
 
+func (s *SubscriptionSuite) getConfirmTokenForEmail(email string) string {
+	s.T().Helper()
+	var token *string
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx,
+		`SELECT confirm_token FROM subscriptions WHERE email = $1`,
+		email,
+	).Scan(&token))
+	require.NotNil(s.T(), token, "confirm_token expected for email %s", email)
+	return *token
+}
+
+func (s *SubscriptionSuite) setConfirmTokenExpired(subID int64, expiresAt time.Time) {
+	s.T().Helper()
+	_, err := s.pg.Pool.Exec(s.ctx,
+		`UPDATE subscriptions SET confirm_token_expires_at = $1 WHERE id = $2`,
+		expiresAt, subID,
+	)
+	require.NoError(s.T(), err)
+}
+
 // --- Metrics ---
 
-// assertCreatedCounter sums every observed subscriptions_created_total sample
-// in the suite's registry. Works whether or not the counter has been touched
-// (testutil.GatherAndCompare requires the metric to be present, which is not
-// guaranteed in error-path tests where service.Subscribe never runs).
-func (s *SubscriptionSuite) assertCreatedCounter(want float64) {
+// assertCounter sums every observed sample of the named counter in the suite's
+// registry and asserts it equals want. Works whether or not the counter has
+// been touched (the metric may be absent from Gather() output entirely if it
+// has never been incremented, which yields got=0).
+func (s *SubscriptionSuite) assertCounter(name string, want float64) {
 	s.T().Helper()
 	mf, err := s.app.Registry.Gather()
 	require.NoError(s.T(), err)
 	var got float64
 	for _, m := range mf {
-		if m.GetName() != "subscriptions_created_total" {
+		if m.GetName() != name {
 			continue
 		}
 		for _, metric := range m.GetMetric() {
 			got += metric.GetCounter().GetValue()
 		}
 	}
-	require.Equal(s.T(), want, got, "subscriptions_created_total")
+	require.Equal(s.T(), want, got, name)
+}
+
+func (s *SubscriptionSuite) assertCreatedCounter(want float64) {
+	s.T().Helper()
+	s.assertCounter("subscriptions_created_total", want)
+}
+
+func (s *SubscriptionSuite) assertConfirmedCounter(want float64) {
+	s.T().Helper()
+	s.assertCounter("subscriptions_confirmed_total", want)
 }
