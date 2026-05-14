@@ -43,6 +43,19 @@ the consumer; run the real thing for stateful or SQL-heavy systems.**
   assertions via Prometheus counters
   (`testutil.GatherAndCompare`).
 
+- **HTTP layer integration tests** — drive the real `chi` router
+  against a real Postgres (testcontainers-go) with the GitHub REST
+  API replaced by an in-process `httptest.Server` fixture. Tests live
+  in `tests/integration/<feature>/` (e.g.
+  `tests/integration/subscription/`); shared fixtures (Postgres
+  helper, GitHub fixture, composition root) live in
+  `tests/integration/internal/`. Every file under
+  `tests/integration/` is gated by `//go:build integration`, so the
+  default `go test ./...` workflow stays Docker-free. The runner is
+  `testify/suite`: `SetupSuite` starts the container, `SetupTest`
+  truncates tables and rebuilds the wired app with a fresh
+  `*prometheus.Registry` so each test sees counters starting at zero.
+
 ## Consequences
 
 ### Positive
@@ -74,5 +87,11 @@ the consumer; run the real thing for stateful or SQL-heavy systems.**
 - `internal/github/client_test.go` — `httptest.Server` pattern.
 - `internal/github/caching_client_test.go` — `miniredis` + `StubClient`
   pattern.
+- `tests/integration/subscription/` — HTTP layer integration suite
+  for `/api/subscribe` (testify/suite + testcontainers-go +
+  `httptest.Server` GitHub REST fixture).
+- `tests/integration/internal/` — shared fixtures (Postgres helper,
+  GitHub REST fixture, composition root).
+- `docs/testing.md` — how to run unit and integration tests.
 - [ADR-0002](0002-consumer-side-interfaces.md) — explains why mocks
   live next to the consumer.
