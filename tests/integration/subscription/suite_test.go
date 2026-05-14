@@ -169,6 +169,53 @@ func (s *SubscriptionSuite) selectRepository(owner, name string) (int64, bool) {
 	return id, true
 }
 
+func (s *SubscriptionSuite) upsertRepository(owner, name string) int64 {
+	s.T().Helper()
+	var id int64
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx, `
+		INSERT INTO repositories (owner, name)
+		VALUES ($1, $2)
+		ON CONFLICT (owner, name) DO UPDATE SET owner = EXCLUDED.owner
+		RETURNING id
+	`, owner, name).Scan(&id))
+	return id
+}
+
+// seedConfirmedSubscription inserts a fully-confirmed subscription row directly,
+// bypassing the HTTP handler so the caller can pin created_at/confirmed_at.
+// Schema invariant: confirmed rows MUST have confirm_token = NULL.
+func (s *SubscriptionSuite) seedConfirmedSubscription(email, owner, name string, createdAt, confirmedAt time.Time) int64 {
+	s.T().Helper()
+	repoID := s.upsertRepository(owner, name)
+
+	var subID int64
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx, `
+		INSERT INTO subscriptions
+			(email, repository_id, confirm_token, confirm_token_expires_at,
+			 unsubscribe_token, confirmed_at, created_at)
+		VALUES ($1, $2, NULL, NULL, $3, $4, $5)
+		RETURNING id
+	`, email, repoID, gofakeit.UUID(), confirmedAt, createdAt).Scan(&subID))
+	return subID
+}
+
+// seedPendingSubscription inserts a not-yet-confirmed row with a unique
+// confirm_token and a far-future expiry.
+func (s *SubscriptionSuite) seedPendingSubscription(email, owner, name string, createdAt time.Time) int64 {
+	s.T().Helper()
+	repoID := s.upsertRepository(owner, name)
+
+	var subID int64
+	require.NoError(s.T(), s.pg.Pool.QueryRow(s.ctx, `
+		INSERT INTO subscriptions
+			(email, repository_id, confirm_token, confirm_token_expires_at,
+			 unsubscribe_token, confirmed_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, NULL, $6)
+		RETURNING id
+	`, email, repoID, gofakeit.UUID(), time.Now().Add(24*time.Hour), gofakeit.UUID(), createdAt).Scan(&subID))
+	return subID
+}
+
 func (s *SubscriptionSuite) getConfirmTokenForEmail(email string) string {
 	s.T().Helper()
 	var token *string
