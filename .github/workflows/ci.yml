@@ -47,8 +47,11 @@ jobs:
         env:
           GOFLAGS: -mod=vendor
 
-      - name: Test
-        run: go test -mod=vendor ./...
+      - name: Install Playwright browsers and OS deps
+        run: go run -mod=vendor github.com/playwright-community/playwright-go/cmd/playwright install --with-deps chromium
+
+      - name: Test (unit + integration + e2e)
+        run: make test-all
 
       - name: Build
         run: go build -mod=vendor -o /dev/null ./cmd/api
