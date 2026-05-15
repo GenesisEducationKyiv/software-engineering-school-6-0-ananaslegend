@@ -59,13 +59,6 @@ func New(cfg Config) *Client {
 	}
 }
 
-// NewClient returns a Client targeting the real GitHub API.
-// token is optional; without it the rate limit is 60 req/h.
-// Kept for backward compatibility — internally delegates to New.
-func NewClient(token string) *Client {
-	return New(Config{Token: token})
-}
-
 // GetLatestReleases fetches the latest release tag for each repo in a single
 // GraphQL request. Repos with no releases are absent from the returned map.
 func (c *Client) GetLatestReleases(ctx context.Context, p GetLatestReleasesParams) (map[int64]string, error) {
