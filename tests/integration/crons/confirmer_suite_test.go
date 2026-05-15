@@ -9,7 +9,6 @@ import (
 
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -185,38 +184,6 @@ func (s *CronsSuite) countSentNotifications() int {
 // confirmer_emails_sent_total whose `result` label equals label.
 func (s *CronsSuite) assertConfirmerCounter(label string, want float64) {
 	s.T().Helper()
-	mf, err := s.registry.Gather()
-	require.NoError(s.T(), err)
-	var got float64
-	for _, m := range mf {
-		if m.GetName() != "confirmer_emails_sent_total" {
-			continue
-		}
-		for _, metric := range m.GetMetric() {
-			if !labelsMatch(metric.GetLabel(), map[string]string{"result": label}) {
-				continue
-			}
-			got += metric.GetCounter().GetValue()
-		}
-	}
-	require.Equal(s.T(), want, got, "confirmer_emails_sent_total{result=%q}", label)
-}
-
-// labelsMatch reports whether observed contains every k=v in want. An empty
-// want map matches any labelset. Shared between CronsSuite.assertConfirmerCounter
-// and NotifierSuite.assertCounter.
-func labelsMatch(observed []*dto.LabelPair, want map[string]string) bool {
-	if len(want) == 0 {
-		return true
-	}
-	have := make(map[string]string, len(observed))
-	for _, p := range observed {
-		have[p.GetName()] = p.GetValue()
-	}
-	for k, v := range want {
-		if have[k] != v {
-			return false
-		}
-	}
-	return true
+	requireCounter(s.T(), s.registry, "confirmer_emails_sent_total",
+		map[string]string{"result": label}, want)
 }

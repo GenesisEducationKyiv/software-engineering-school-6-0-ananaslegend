@@ -189,26 +189,8 @@ func (s *NotifierSuite) countPendingReleaseNotifications() int {
 
 // --- Metrics ---
 
-// assertCounter sums every observed sample of name whose labels include every
-// k=v in want, and asserts the total equals expected. A counter that has never
-// been incremented is absent from Gather() output, so the loop naturally yields
-// 0 in that case.
+// assertCounter delegates to the shared requireCounter helper.
 func (s *NotifierSuite) assertCounter(name string, want map[string]string, expected float64) {
 	s.T().Helper()
-	mf, err := s.registry.Gather()
-	require.NoError(s.T(), err)
-
-	var got float64
-	for _, fam := range mf {
-		if fam.GetName() != name {
-			continue
-		}
-		for _, m := range fam.GetMetric() {
-			if !labelsMatch(m.GetLabel(), want) {
-				continue
-			}
-			got += m.GetCounter().GetValue()
-		}
-	}
-	require.Equal(s.T(), expected, got, "%s%v", name, want)
+	requireCounter(s.T(), s.registry, name, want, expected)
 }
