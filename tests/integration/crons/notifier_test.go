@@ -1,6 +1,6 @@
 //go:build integration
 
-package notifier_test
+package crons_test
 
 import (
 	"errors"
@@ -15,9 +15,7 @@ import (
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 )
 
-const (
-	metricEmailsSent = "notifier_emails_sent_total"
-)
+const metricNotifierEmailsSent = "notifier_emails_sent_total"
 
 func (s *NotifierSuite) TestFlush_HappyPath_SingleRow_SendsEmailAndMarksSent() {
 	email := "user@example.com"
@@ -33,21 +31,21 @@ func (s *NotifierSuite) TestFlush_HappyPath_SingleRow_SendsEmailAndMarksSent() {
 	assert.Equal(s.T(), "golang/go", got.RepoFullName)
 	assert.Equal(s.T(), "v1.2.3", got.ReleaseTag)
 	assert.Equal(s.T(), "https://github.com/golang/go/releases/tag/v1.2.3", got.ReleaseURL)
-	assert.Equal(s.T(), testAppBaseURL+"/api/unsubscribe/"+unsubToken, got.UnsubscribeURL)
+	assert.Equal(s.T(), cronsTestBaseURL+"/api/unsubscribe/"+unsubToken, got.UnsubscribeURL)
 
 	assert.NotNil(s.T(), s.getReleaseNotificationSentAt(rowID), "row must be marked sent")
 	assert.Equal(s.T(), 0, s.countPendingReleaseNotifications())
 
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "ok"}, 1)
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "error"}, 0)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "ok"}, 1)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "error"}, 0)
 }
 
 func (s *NotifierSuite) TestFlush_Empty_NoMailerCalls_NoMetricChange() {
 	s.notifier.Flush(s.ctx)
 
 	assert.Equal(s.T(), 0, s.mailer.callCount())
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "ok"}, 0)
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "error"}, 0)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "ok"}, 0)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "error"}, 0)
 }
 
 func (s *NotifierSuite) TestFlush_MultipleRows_AllProcessedInFIFOOrder() {
@@ -69,7 +67,7 @@ func (s *NotifierSuite) TestFlush_MultipleRows_AllProcessedInFIFOOrder() {
 		assert.NotNil(s.T(), s.getReleaseNotificationSentAt(id), "row %d must be marked sent", id)
 	}
 	assert.Equal(s.T(), 0, s.countPendingReleaseNotifications())
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "ok"}, 3)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "ok"}, 3)
 }
 
 func (s *NotifierSuite) TestFlush_MailerError_RowRemainsPending_LoopStops() {
@@ -82,8 +80,8 @@ func (s *NotifierSuite) TestFlush_MailerError_RowRemainsPending_LoopStops() {
 	assert.Equal(s.T(), 1, s.mailer.callCount())
 	assert.Nil(s.T(), s.getReleaseNotificationSentAt(rowID), "row must remain pending after mailer error")
 	assert.Equal(s.T(), 1, s.countPendingReleaseNotifications())
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "error"}, 1)
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "ok"}, 0)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "error"}, 1)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "ok"}, 0)
 
 	// Row must not be lost: clearing the error and retrying must drain it.
 	s.mailer.setError(nil)
@@ -91,8 +89,8 @@ func (s *NotifierSuite) TestFlush_MailerError_RowRemainsPending_LoopStops() {
 
 	assert.Equal(s.T(), 2, s.mailer.callCount())
 	assert.NotNil(s.T(), s.getReleaseNotificationSentAt(rowID))
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "ok"}, 1)
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "error"}, 1)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "ok"}, 1)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "error"}, 1)
 }
 
 func (s *NotifierSuite) TestFlush_AlreadySent_RowSkipped() {
@@ -124,7 +122,7 @@ func (s *NotifierSuite) TestFlush_Idempotent_SecondRunIsNoOp() {
 	s.notifier.Flush(s.ctx)
 
 	assert.Equal(s.T(), 1, s.mailer.callCount(), "second Flush must be a no-op")
-	s.assertCounter(metricEmailsSent, map[string]string{"result": "ok"}, 1)
+	s.assertCounter(metricNotifierEmailsSent, map[string]string{"result": "ok"}, 1)
 }
 
 func (s *NotifierSuite) TestFlush_ConcurrentDrainers_NoDuplicateSendsViaSkipLocked() {
@@ -146,7 +144,7 @@ func (s *NotifierSuite) TestFlush_ConcurrentDrainers_NoDuplicateSendsViaSkipLock
 		Repo:     repo2,
 		Mailer:   s.mailer,
 		Interval: time.Hour,
-		BaseURL:  testAppBaseURL,
+		BaseURL:  cronsTestBaseURL,
 	})
 
 	g, gctx := errgroup.WithContext(s.ctx)

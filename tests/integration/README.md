@@ -23,8 +23,10 @@ The default `make test` skips this tree — every file under `tests/integration/
   - `github.go` — REST fixture (`GitHubFixture`) for `HEAD /repos/{owner}/{name}`.
   - `app.go` — composition root (`NewApp`).
 - `subscription/` — `/api/subscribe`, `/api/confirm`, `/api/unsubscribe`, `/api/subscriptions`.
-- `crons/` — background workers exercised end-to-end against real SMTP via a Mailpit container: `confirmer` (and, in time, `scanner`).
-- `notifier/` — release-notification outbox drainer driven via `Flush(ctx)`. Uses an in-memory spy mailer (no Mailpit container) to keep error-path and URL assertions deterministic.
+- `crons/` — background workers driven via `Flush(ctx)`. Two co-located suites in package `crons_test`:
+  - `CronsSuite` (confirmer) — real SMTP delivery through a Mailpit container, asserts on inbox state via Mailpit's REST API.
+  - `NotifierSuite` — release-notification outbox drainer with an in-memory spy mailer; keeps error-path and URL assertions deterministic without a second container.
+  Shared package-level helpers: `cronsTestBaseURL` and `labelsMatch` (metric-label filter used by both suites).
 
 ## Adding a new suite
 

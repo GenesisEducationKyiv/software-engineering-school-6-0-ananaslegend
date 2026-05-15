@@ -1,6 +1,6 @@
 //go:build integration
 
-package notifier_test
+package crons_test
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -21,8 +20,12 @@ import (
 	"github.com/ananaslegend/reposeetory/tests/integration/internal"
 )
 
-const testAppBaseURL = "http://test.local"
-
+// NotifierSuite drives the release-notification outbox drainer
+// (internal/notifier.Notifier) against real Postgres plus an in-memory spy
+// mailer. The spy is deliberate: it lets these tests inject mailer errors
+// deterministically and assert on the constructed URLs / params without
+// parsing rendered email bodies — properties Mailpit (used by CronsSuite for
+// the confirmer) cannot give us cheaply.
 type NotifierSuite struct {
 	suite.Suite
 
@@ -64,7 +67,7 @@ func (s *NotifierSuite) SetupTest() {
 		Repo:     s.repo,
 		Mailer:   s.mailer,
 		Interval: time.Hour, // unused — tests drive Flush() directly
-		BaseURL:  testAppBaseURL,
+		BaseURL:  cronsTestBaseURL,
 		Registry: s.registry,
 	})
 }
@@ -186,11 +189,11 @@ func (s *NotifierSuite) countPendingReleaseNotifications() int {
 
 // --- Metrics ---
 
-// assertCounter mirrors the helper in tests/integration/subscription: it sums
-// every observed sample of name and asserts the total equals want. A counter
-// that has never been incremented is absent from Gather() output, so the loop
-// naturally yields 0 in that case.
-func (s *NotifierSuite) assertCounter(name string, labels map[string]string, want float64) {
+// assertCounter sums every observed sample of name whose labels include every
+// k=v in want, and asserts the total equals expected. A counter that has never
+// been incremented is absent from Gather() output, so the loop naturally yields
+// 0 in that case.
+func (s *NotifierSuite) assertCounter(name string, want map[string]string, expected float64) {
 	s.T().Helper()
 	mf, err := s.registry.Gather()
 	require.NoError(s.T(), err)
@@ -201,27 +204,11 @@ func (s *NotifierSuite) assertCounter(name string, labels map[string]string, wan
 			continue
 		}
 		for _, m := range fam.GetMetric() {
-			if !labelsMatch(m.GetLabel(), labels) {
+			if !labelsMatch(m.GetLabel(), want) {
 				continue
 			}
 			got += m.GetCounter().GetValue()
 		}
 	}
-	require.Equal(s.T(), want, got, "%s%v", name, labels)
-}
-
-func labelsMatch(observed []*dto.LabelPair, want map[string]string) bool {
-	if len(want) == 0 {
-		return true
-	}
-	have := make(map[string]string, len(observed))
-	for _, p := range observed {
-		have[p.GetName()] = p.GetValue()
-	}
-	for k, v := range want {
-		if have[k] != v {
-			return false
-		}
-	}
-	return true
+	require.Equal(s.T(), expected, got, "%s%v", name, want)
 }

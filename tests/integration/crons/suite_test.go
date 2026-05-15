@@ -193,7 +193,7 @@ func (s *CronsSuite) assertConfirmerCounter(label string, want float64) {
 			continue
 		}
 		for _, metric := range m.GetMetric() {
-			if !labelEquals(metric.GetLabel(), "result", label) {
+			if !labelsMatch(metric.GetLabel(), map[string]string{"result": label}) {
 				continue
 			}
 			got += metric.GetCounter().GetValue()
@@ -202,12 +202,21 @@ func (s *CronsSuite) assertConfirmerCounter(label string, want float64) {
 	require.Equal(s.T(), want, got, "confirmer_emails_sent_total{result=%q}", label)
 }
 
-// labelEquals reports whether pairs contain a {name=value} entry.
-func labelEquals(pairs []*dto.LabelPair, name, value string) bool {
-	for _, p := range pairs {
-		if p.GetName() == name {
-			return p.GetValue() == value
+// labelsMatch reports whether observed contains every k=v in want. An empty
+// want map matches any labelset. Shared between CronsSuite.assertConfirmerCounter
+// and NotifierSuite.assertCounter.
+func labelsMatch(observed []*dto.LabelPair, want map[string]string) bool {
+	if len(want) == 0 {
+		return true
+	}
+	have := make(map[string]string, len(observed))
+	for _, p := range observed {
+		have[p.GetName()] = p.GetValue()
+	}
+	for k, v := range want {
+		if have[k] != v {
+			return false
 		}
 	}
-	return false
+	return true
 }
