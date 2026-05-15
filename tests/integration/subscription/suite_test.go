@@ -11,11 +11,10 @@ import (
 	"testing"
 	"time"
 
+	internal2 "github.com/ananaslegend/reposeetory/tests/internal"
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	"github.com/ananaslegend/reposeetory/tests/integration/internal"
 )
 
 type SubscriptionSuite struct {
@@ -24,9 +23,9 @@ type SubscriptionSuite struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	pg       *internal.Postgres
-	githubFx *internal.GitHubFixture
-	app      *internal.App
+	pg       *internal2.Postgres
+	githubFx *internal2.GitHubFixture
+	app      *internal2.App
 }
 
 func TestSubscriptionSuite(t *testing.T) {
@@ -35,15 +34,15 @@ func TestSubscriptionSuite(t *testing.T) {
 
 func (s *SubscriptionSuite) SetupSuite() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.pg = internal.NewPostgres(s.ctx, s.T())
-	s.githubFx = internal.NewGitHubFixture(s.T())
+	s.pg = internal2.NewPostgres(s.ctx, s.T())
+	s.githubFx = internal2.NewGitHubFixture(s.T())
 	gofakeit.Seed(0) // 0 = non-deterministic seed each run
 }
 
 func (s *SubscriptionSuite) SetupTest() {
 	s.pg.Truncate(s.ctx, s.T())
 	s.githubFx.Reset()
-	s.app = internal.NewApp(s.T(), internal.AppConfig{
+	s.app = internal2.NewApp(s.T(), internal2.AppConfig{
 		Pool:            s.pg.Pool,
 		GitHubBaseURL:   s.githubFx.URL(),
 		GitHubToken:     "test-token",

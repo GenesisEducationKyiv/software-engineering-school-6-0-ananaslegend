@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	internal2 "github.com/ananaslegend/reposeetory/tests/internal"
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
@@ -16,8 +17,6 @@ import (
 	confirmerrepo "github.com/ananaslegend/reposeetory/internal/confirmer/repository"
 	"github.com/ananaslegend/reposeetory/internal/notifier/emailer"
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
-
-	"github.com/ananaslegend/reposeetory/tests/integration/internal"
 )
 
 const (
@@ -36,8 +35,8 @@ type CronsSuite struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	pg      *internal.Postgres
-	mailpit *internal.Mailpit
+	pg      *internal2.Postgres
+	mailpit *internal2.Mailpit
 
 	registry  *prometheus.Registry
 	txr       *transactor.PgxTransactor
@@ -51,8 +50,8 @@ func TestCronsSuite(t *testing.T) {
 
 func (s *CronsSuite) SetupSuite() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.pg = internal.NewPostgres(s.ctx, s.T())
-	s.mailpit = internal.NewMailpit(s.ctx, s.T())
+	s.pg = internal2.NewPostgres(s.ctx, s.T())
+	s.mailpit = internal2.NewMailpit(s.ctx, s.T())
 	gofakeit.Seed(0)
 }
 

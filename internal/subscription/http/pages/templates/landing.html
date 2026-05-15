@@ -188,13 +188,13 @@
   <section class="hero">
     <div class="wordmark">repo<span class="see">see</span>tory</div>
     <p class="tagline">Don't monitor GitHub.<br>Just <em>see</em> the updates.</p>
-    <form class="form" id="subscribe-form" onsubmit="handleSubmit(event)" novalidate>
+    <form class="form" id="subscribe-form" data-testid="subscribe-form" onsubmit="handleSubmit(event)" novalidate>
       <label class="visually-hidden" for="repo">GitHub repository (owner/repository)</label>
-      <input type="text" id="repo" name="repository" placeholder="owner/repository" autocomplete="off" required>
+      <input type="text" id="repo" data-testid="repo-input" name="repository" placeholder="owner/repository" autocomplete="off" required>
       <label class="visually-hidden" for="email">Your email address</label>
-      <input type="email" id="email" name="email" placeholder="your@email.com" autocomplete="email" required>
-      <button type="submit" id="submit-btn">Subscribe repository →</button>
-      <p class="error" id="error-msg" role="alert" aria-live="polite"></p>
+      <input type="email" id="email" data-testid="email-input" name="email" placeholder="your@email.com" autocomplete="email" required>
+      <button type="submit" id="submit-btn" data-testid="submit-button">Subscribe repository →</button>
+      <p class="error" id="error-msg" data-testid="error-message" role="alert" aria-live="polite"></p>
     </form>
     <div class="chips" aria-label="Example repositories">
       <span class="chip">axios/axios</span>

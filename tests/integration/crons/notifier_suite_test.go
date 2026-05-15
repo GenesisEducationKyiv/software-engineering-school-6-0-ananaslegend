@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ananaslegend/reposeetory/tests/internal"
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,6 @@ import (
 	notifrepo "github.com/ananaslegend/reposeetory/internal/notifier/repository"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
-	"github.com/ananaslegend/reposeetory/tests/integration/internal"
 )
 
 // NotifierSuite drives the release-notification outbox drainer

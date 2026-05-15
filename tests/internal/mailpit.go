@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration || e2e
 
 package internal
 
@@ -33,12 +33,12 @@ type Mailpit struct {
 // MailpitMessage is the trimmed subset of the Mailpit message-summary record
 // that integration tests actually rely on.
 type MailpitMessage struct {
-	ID      string          `json:"ID"`
-	From    MailpitAddress  `json:"From"`
+	ID      string           `json:"ID"`
+	From    MailpitAddress   `json:"From"`
 	To      []MailpitAddress `json:"To"`
-	Subject string          `json:"Subject"`
-	Snippet string          `json:"Snippet"`
-	Created time.Time       `json:"Created"`
+	Subject string           `json:"Subject"`
+	Snippet string           `json:"Snippet"`
+	Created time.Time        `json:"Created"`
 }
 
 // MailpitAddress mirrors the {Name, Address} shape Mailpit returns.
@@ -151,4 +151,24 @@ func (m *Mailpit) MessageSource(ctx context.Context, t testing.TB, id string) st
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return string(body)
+}
+
+// MessageHTML returns the parsed HTML body of message id via Mailpit's
+// /api/v1/message/{id} endpoint, which already performs MIME parsing.
+func (m *Mailpit) MessageHTML(ctx context.Context, t testing.TB, id string) string {
+	t.Helper()
+	url := fmt.Sprintf("%s/api/v1/message/%s", m.APIBase, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	require.NoError(t, err)
+	resp, err := m.client.Do(req)
+	require.NoError(t, err, "mailpit message")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "mailpit message status")
+
+	var payload struct {
+		HTML string `json:"HTML"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.NotEmpty(t, payload.HTML, "mailpit returned empty HTML body for %s", id)
+	return payload.HTML
 }
