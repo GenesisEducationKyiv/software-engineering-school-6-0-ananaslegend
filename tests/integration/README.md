@@ -22,8 +22,9 @@ The default `make test` skips this tree — every file under `tests/integration/
   - `pg.go` — Postgres container helper (`NewPostgres`, `Truncate`).
   - `github.go` — REST fixture (`GitHubFixture`) for `HEAD /repos/{owner}/{name}`.
   - `app.go` — composition root (`NewApp`).
-- `subscription/` — `/api/subscribe`, and future suites for `/api/confirm`, `/api/unsubscribe`, `/api/subscriptions`.
-- Future: `scanner/`, `notifier/`, `confirmer/` will share `internal/`.
+- `subscription/` — `/api/subscribe`, `/api/confirm`, `/api/unsubscribe`, `/api/subscriptions`.
+- `crons/` — background workers exercised end-to-end against real SMTP via a Mailpit container: `confirmer` (and, in time, `scanner`).
+- `notifier/` — release-notification outbox drainer driven via `Flush(ctx)`. Uses an in-memory spy mailer (no Mailpit container) to keep error-path and URL assertions deterministic.
 
 ## Adding a new suite
 
