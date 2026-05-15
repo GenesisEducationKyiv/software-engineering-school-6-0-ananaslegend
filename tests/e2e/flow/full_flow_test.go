@@ -115,7 +115,9 @@ func (s *FullFlowSuite) TestLifecycle() {
 	// Phase 4 — emulate new release.
 	// Scanner needs one tick after confirm to record `v1.0.0` baseline,
 	// otherwise the next tick treats v2.0.0 as the only-and-baseline tag.
-	time.Sleep(150 * time.Millisecond)
+	// Poll the DB for the baseline write — proves a scanner.Tick completed
+	// without depending on wall-clock timing.
+	s.pg.WaitForLastSeen(ctx, t, repo, "v1.0.0", 5*time.Second)
 	s.ghGraphQL.SetLatestTag(repo, "v2.0.0")
 
 	msgs = s.mailpit.WaitForMessages(ctx, t, 1, 5*time.Second)
@@ -143,8 +145,14 @@ func (s *FullFlowSuite) TestLifecycle() {
 	require.Equal(t, "You've Been Unsubscribed", heading)
 
 	// Phase 6 — emulate yet another release; mailbox must stay empty.
+	// Wait for the scanner to observe v3.0.0 (the DB write proves Tick ran),
+	// then assert no release_notifications were inserted for that tag.
+	// InsertNotifications and UpsertLastSeen share a transaction, so once
+	// last_seen_tag = v3.0.0 the negative check is decisive: nothing
+	// downstream can deliver an email, no timing slop required.
 	s.ghGraphQL.SetLatestTag(repo, "v3.0.0")
-	time.Sleep(500 * time.Millisecond) // 5× scanner + 5× drainer ticks
+	s.pg.WaitForLastSeen(ctx, t, repo, "v3.0.0", 5*time.Second)
+	s.pg.AssertNoReleaseNotifications(ctx, t, repo, "v3.0.0")
 	require.Empty(t, s.mailpit.Messages(ctx, t),
 		"unsubscribed user must not receive release email")
 

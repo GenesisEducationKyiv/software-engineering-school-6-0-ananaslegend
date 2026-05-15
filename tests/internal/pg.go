@@ -82,6 +82,56 @@ func (p *Postgres) Truncate(ctx context.Context, t testing.TB) {
 	require.NoError(t, err, "truncate tables")
 }
 
+// WaitForLastSeen polls the repositories row for repo ("owner/name") until
+// last_seen_tag equals tag, or fails the test after within elapses. Use this
+// in place of magic time.Sleep waits for scanner ticks: the row update is
+// the observable side effect that proves at least one scanner.Tick has
+// completed.
+func (p *Postgres) WaitForLastSeen(ctx context.Context, t testing.TB, repo, tag string, within time.Duration) {
+	t.Helper()
+	owner, name, ok := strings.Cut(repo, "/")
+	require.True(t, ok, "repo must be in owner/name form, got %q", repo)
+
+	deadline := time.Now().Add(within)
+	var got *string
+	var lastErr error
+	for {
+		lastErr = p.Pool.QueryRow(ctx,
+			`SELECT last_seen_tag FROM repositories WHERE owner=$1 AND name=$2`,
+			owner, name).Scan(&got)
+		if lastErr == nil && got != nil && *got == tag {
+			return
+		}
+		if time.Now().After(deadline) {
+			require.FailNowf(t, "scanner did not record last_seen_tag",
+				"want %q for %s within %s; got err=%v val=%v",
+				tag, repo, within, lastErr, got)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// AssertNoReleaseNotifications asserts the release_notifications table has
+// zero rows for (repo, tag). Combined with WaitForLastSeen (which proves a
+// scanner Tick ran), this is a deterministic negative check: if the scanner
+// did not insert a row in the same transaction that updated last_seen_tag,
+// nothing downstream can deliver an email.
+func (p *Postgres) AssertNoReleaseNotifications(ctx context.Context, t testing.TB, repo, tag string) {
+	t.Helper()
+	owner, name, ok := strings.Cut(repo, "/")
+	require.True(t, ok, "repo must be in owner/name form, got %q", repo)
+
+	var count int
+	err := p.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM release_notifications rn
+		JOIN repositories r ON r.id = rn.repository_id
+		WHERE r.owner = $1 AND r.name = $2 AND rn.release_tag = $3
+	`, owner, name, tag).Scan(&count)
+	require.NoError(t, err, "count release_notifications")
+	require.Zero(t, count,
+		"expected zero release_notifications for %s tag=%s, got %d", repo, tag, count)
+}
+
 func migrateUp(dsn string) error {
 	src, err := iofs.New(migrations.FS, ".")
 	if err != nil {

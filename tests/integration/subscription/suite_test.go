@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	internal2 "github.com/ananaslegend/reposeetory/tests/internal"
+	"github.com/ananaslegend/reposeetory/tests/internal"
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -23,9 +23,9 @@ type SubscriptionSuite struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	pg       *internal2.Postgres
-	githubFx *internal2.GitHubFixture
-	app      *internal2.App
+	pg       *internal.Postgres
+	githubFx *internal.GitHubFixture
+	app      *internal.App
 }
 
 func TestSubscriptionSuite(t *testing.T) {
@@ -34,15 +34,15 @@ func TestSubscriptionSuite(t *testing.T) {
 
 func (s *SubscriptionSuite) SetupSuite() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.pg = internal2.NewPostgres(s.ctx, s.T())
-	s.githubFx = internal2.NewGitHubFixture(s.T())
+	s.pg = internal.NewPostgres(s.ctx, s.T())
+	s.githubFx = internal.NewGitHubFixture(s.T())
 	gofakeit.Seed(0) // 0 = non-deterministic seed each run
 }
 
 func (s *SubscriptionSuite) SetupTest() {
 	s.pg.Truncate(s.ctx, s.T())
 	s.githubFx.Reset()
-	s.app = internal2.NewApp(s.T(), internal2.AppConfig{
+	s.app = internal.NewApp(s.T(), internal.AppConfig{
 		Pool:            s.pg.Pool,
 		GitHubBaseURL:   s.githubFx.URL(),
 		GitHubToken:     "test-token",
@@ -280,6 +280,26 @@ func (s *SubscriptionSuite) insertReleaseNotification(subID, repoID int64, tag s
 // has never been incremented, which yields got=0).
 func (s *SubscriptionSuite) assertCounter(name string, want float64) {
 	s.T().Helper()
+	got := s.gatherCounter(name)
+	require.Equal(s.T(), want, got, name)
+}
+
+// assertCounterEventually polls the registry until the counter equals want
+// or the deadline elapses. Use this when the increment happens on a
+// different goroutine than the test (e.g. concurrent HTTP handlers): even
+// when the handler synchronously increments before returning the response,
+// any future refactor that moves the .Inc() to a deferred or async path
+// would silently break a one-shot assertCounter without this guard.
+func (s *SubscriptionSuite) assertCounterEventually(name string, want float64) {
+	s.T().Helper()
+	require.Eventuallyf(s.T(), func() bool {
+		return s.gatherCounter(name) == want
+	}, time.Second, 10*time.Millisecond,
+		"%s: want %v, last observed %v", name, want, s.gatherCounter(name))
+}
+
+func (s *SubscriptionSuite) gatherCounter(name string) float64 {
+	s.T().Helper()
 	mf, err := s.app.Registry.Gather()
 	require.NoError(s.T(), err)
 	var got float64
@@ -291,7 +311,7 @@ func (s *SubscriptionSuite) assertCounter(name string, want float64) {
 			got += metric.GetCounter().GetValue()
 		}
 	}
-	require.Equal(s.T(), want, got, name)
+	return got
 }
 
 func (s *SubscriptionSuite) assertCreatedCounter(want float64) {

@@ -184,6 +184,9 @@ func (s *SubscriptionSuite) TestSubscribe_GitHubError() {
 
 	assert.Empty(s.T(), s.selectSubscriptionsByEmail(email))
 	assert.Equal(s.T(), 0, s.countAllConfirmationNotifications())
-	assert.GreaterOrEqual(s.T(), s.githubFx.RequestCount(), 1)
+	// Equal(1), not GreaterOrEqual: a single GitHub probe per Subscribe call.
+	// If retry logic ever gets added in front of the GitHub client, this
+	// assertion catches it; GreaterOrEqual would silently pass.
+	assert.Equal(s.T(), 1, s.githubFx.RequestCount())
 	s.assertCreatedCounter(0)
 }

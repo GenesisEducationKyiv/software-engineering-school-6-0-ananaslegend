@@ -168,7 +168,7 @@ func TestNew_CustomURLsUsed(t *testing.T) {
 }
 
 func TestNewClient_BackwardCompat(t *testing.T) {
-	c := NewClient("legacy-tok")
+	c := New(Config{Token: "legacy-tok"})
 	assert.Equal(t, "legacy-tok", c.token)
 	assert.Equal(t, "https://api.github.com/graphql", c.graphqlURL)
 	assert.Equal(t, "https://api.github.com", c.restURL)

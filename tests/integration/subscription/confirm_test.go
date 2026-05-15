@@ -213,8 +213,10 @@ func (s *SubscriptionSuite) TestConfirm_Concurrent() {
 	assert.Nil(s.T(), after[0].ConfirmToken, "confirm_token must be cleared after concurrent confirm")
 
 	// Counter is incremented once per successful service.Confirm — by construction
-	// it should match the number of HTTP 200 responses we observed.
-	s.assertCounter("subscriptions_confirmed_total", float64(successes))
+	// it should match the number of HTTP 200 responses we observed. Poll briefly
+	// to insulate the assertion from any future refactor that moves the .Inc()
+	// off the synchronous return path of the handler.
+	s.assertCounterEventually("subscriptions_confirmed_total", float64(successes))
 }
 
 func (s *SubscriptionSuite) TestConfirm_LongRandomToken() {

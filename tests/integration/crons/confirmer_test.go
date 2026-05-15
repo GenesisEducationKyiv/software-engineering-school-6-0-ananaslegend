@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v7"
@@ -141,12 +142,14 @@ func (s *CronsSuite) TestConfirmer_Flush_ConfirmURL_Composition() {
 }
 
 func (s *CronsSuite) TestConfirmer_Flush_MailerError_NoMarkSent() {
-	// Swap the SMTP mailer for one pointing at a closed TCP port. Connection
-	// attempts return immediately with "connection refused".
-	closedPort := closedTCPPort(s.T())
+	// Swap the SMTP mailer for one pointing at a port that accepts TCP
+	// connections but immediately closes them, so the SMTP handshake fails
+	// deterministically. (A bind-close trick on the same port would race
+	// with the kernel reassigning the port to another listener.)
+	deadPort := unreachableSMTPPort(s.T())
 	failing, err := emailer.NewSMTPMailer(emailer.SMTPMailerConfig{
 		Host:      "127.0.0.1",
-		Port:      closedPort,
+		Port:      deadPort,
 		From:      cronsTestFromAddr,
 		TLSPolicy: "none",
 	})
@@ -193,13 +196,26 @@ func (s *CronsSuite) randomEmail() string {
 	return strings.ToLower(gofakeit.Email())
 }
 
-// closedTCPPort binds a loopback TCP port, closes it, and returns the number.
-// The port is guaranteed to refuse connections immediately afterwards (the
-// kernel will not have reassigned it before the test finishes).
-func closedTCPPort(t require.TestingT) int {
+// unreachableSMTPPort binds a loopback TCP listener and starts an accept
+// loop that closes every connection immediately. The returned port number
+// always accepts TCP but never speaks SMTP, so go-mail's client gets an
+// EOF during the protocol handshake and returns an error. This avoids the
+// race the previous bind-then-close helper had, where the kernel could
+// reassign the port to another listener between Close and dial.
+func unreachableSMTPPort(t testing.TB) int {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	port := ln.Addr().(*net.TCPAddr).Port
-	require.NoError(t, ln.Close())
-	return port
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return // listener closed
+			}
+			_ = c.Close()
+		}
+	}()
+	return ln.Addr().(*net.TCPAddr).Port
 }

@@ -11,11 +11,9 @@ import (
 )
 
 // labelsMatch reports whether observed contains every k=v in want. An empty
-// want map matches any labelset.
+// (but non-nil) want matches any labelset; a nil want is a programming error
+// because it makes any assertion silently true.
 func labelsMatch(observed []*dto.LabelPair, want map[string]string) bool {
-	if len(want) == 0 {
-		return true
-	}
 	have := make(map[string]string, len(observed))
 	for _, p := range observed {
 		have[p.GetName()] = p.GetValue()
@@ -32,8 +30,14 @@ func labelsMatch(observed []*dto.LabelPair, want map[string]string) bool {
 // labels include every k=v in want, and asserts the total equals expected.
 // A counter that has never been incremented is absent from Gather() output,
 // so the loop naturally yields 0 in that case.
+//
+// want must not be nil — pass map[string]string{} explicitly to mean
+// "sum across every labelset". This stops misuse where a forgotten label
+// map silently passes the assertion.
 func requireCounter(t *testing.T, reg *prometheus.Registry, name string, want map[string]string, expected float64) {
 	t.Helper()
+	require.NotNil(t, want,
+		"requireCounter: want must be non-nil (use map[string]string{} for 'any labelset')")
 	mf, err := reg.Gather()
 	require.NoError(t, err)
 

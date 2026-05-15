@@ -20,9 +20,9 @@ shared `Browser` (one Chromium instance for the whole suite, fresh
 | 1 | Browser fills the form and clicks Submit. | URL becomes `**/subscribed`; `page-heading == "Check your inbox"`. |
 | 2 | Wait for one Mailpit message; load its HTML body into a Playwright page via `Browser.LoadEmailHTML`. | Recipient is the form email; subject contains "Confirm"; `email-heading == "Confirm Your Subscription"`; the confirm button's `href` contains `/api/confirm/`. |
 | 3 | Browser navigates to the confirm URL. | `page-heading == "Subscription Confirmed"`. |
-| 4 | Sleep 150 ms (≥ 3 scanner ticks) so the scanner records `v1.0.0` as `last_seen`; bump the GraphQL fixture to `v2.0.0`. | Mailpit receives a release email; subject contains `v2.0.0`; `email-heading == "New Release Published"`; `release-button[href]` equals the composed URL `https://github.com/<owner>/<name>/releases/tag/v2.0.0`; `unsubscribe-link[href]` contains `/api/unsubscribe/`. |
+| 4 | Poll `repositories.last_seen_tag` until it equals `v1.0.0` (proof a scanner Tick ran); bump the GraphQL fixture to `v2.0.0`. | Mailpit receives a release email; subject contains `v2.0.0`; `email-heading == "New Release Published"`; `release-button[href]` equals the composed URL `https://github.com/<owner>/<name>/releases/tag/v2.0.0`; `unsubscribe-link[href]` contains `/api/unsubscribe/`. |
 | 5 | Browser navigates to the unsubscribe URL. | `page-heading == "You've Been Unsubscribed"`. |
-| 6 | Bump fixture to `v3.0.0`; sleep 500 ms (5× scanner + 5× drainer ticks). | Mailpit stays empty. |
+| 6 | Bump fixture to `v3.0.0`; poll `last_seen_tag` until it equals `v3.0.0`. | Zero `release_notifications` rows for `v3.0.0`; Mailpit stays empty. |
 | 7 | Re-subscribe through the UI with the same email/repo. | URL becomes `**/subscribed`; heading is `"Check your inbox"`. |
 | 8 | Wait for a new confirmation email. | Same shape as phase 2 (a fresh confirm token). |
 | 9 | Navigate to the new confirm URL. | `"Subscription Confirmed"`. |
@@ -58,22 +58,23 @@ returns `true` only when `LastSeenTag != nil && latestTag != *LastSeenTag`.
 That means the very first tick after a subscription becomes active records
 the current tag as `last_seen` **without emitting a notification**.
 
-- **Phase 4** sleeps 150 ms after confirm so the scanner has at least one
-  tick at `tick=50ms` to write the `v1.0.0` baseline before the fixture is
-  flipped to `v2.0.0`. Without that sleep the next tick would see `v2.0.0`
-  as the only-and-baseline tag and stay silent.
-- **Phase 6** publishes `v3.0.0` and waits 500 ms. The scanner still ticks
-  and updates `last_seen_tag` to `v3.0.0`, but `InsertNotifications` only
-  fires for *active* subscriptions and the row has just been unsubscribed,
-  so the negative assertion (empty mailbox) holds.
-- **Phase 10** skips the baseline sleep because `last_seen_tag = v3.0.0` is
+- **Phase 4** polls `repositories.last_seen_tag` until it equals `v1.0.0`
+  via `Postgres.WaitForLastSeen`. That row update is the side effect that
+  proves a `scanner.Tick` has completed. Only then does the test bump the
+  fixture to `v2.0.0` — without the baseline write the next tick would see
+  `v2.0.0` as the only-and-baseline tag and stay silent.
+- **Phase 6** publishes `v3.0.0`, polls for `last_seen_tag = v3.0.0`, and
+  then calls `Postgres.AssertNoReleaseNotifications`. `UpsertLastSeen` and
+  `InsertNotifications` share a single transaction
+  (`internal/scanner/scanner.go`), so once the baseline tag is visible the
+  negative check is decisive: no row was inserted for the inactive
+  subscription, so nothing downstream can deliver an email. The mailbox
+  assertion is kept as a belt-and-suspenders observable.
+- **Phase 10** skips the baseline poll because `last_seen_tag = v3.0.0` is
   already persisted from phase 6. Setting `v4.0.0` is a fresh transition
-  on the next tick.
+  on the next tick, so the existing `WaitForMessages` is sufficient.
 
-The 150 ms / 500 ms numbers come from the worker tick (50 ms) in
-`E2EAppConfig`. They are upper bounds for the worst case where the scanner
-just missed a tick; typical runs complete in one tick. Replacing them with
-DB-polling helpers (`WaitForLastSeen`, etc.) is a future optimization —
+Both polls have a 5 s deadline — comfortably above the 50 ms worker tick.
 `testing/synctest` does not fit here because pgx and SMTP run on real
 `net.Conn` and break out of the bubble.
 
