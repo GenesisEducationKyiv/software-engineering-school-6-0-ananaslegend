@@ -18,7 +18,7 @@ GitHub Release Notification API. Користувач підписується �
 
 - **Logger через context** — `zerolog.Ctx(ctx)` усюди; `RequestLogger` middleware інжектує `request_id/method/path` у кожен запит. → [ADR-0006](docs/adr/0006-logger-via-context.md)
 
-- **Vendor + щотижневі update із cooldown** — `go mod vendor` закомічений, Docker білдить з `-mod=vendor`, без `apk add` у runtime-stage (обхід корп. SSL-proxy); Dependabot щотижня, 7-денний cooldown, 30 днів для semver-major. `make tidy` оновлює `go.mod`/`go.sum` + `vendor/` атомарно. → [ADR-0007](docs/adr/0007-vendor-and-dependency-updates.md)
+- **Без vendoring, Dependabot із cooldown** — `vendor/` не комітимо; CI і Docker білдять через стандартну module resolution із кешем `proxy.golang.org`. Supply-chain захист — Dependabot щотижня з 7-денним cooldown (30 днів для semver-major). `make tidy` — це просто `go mod tidy`. → [ADR-0014](docs/adr/0014-drop-vendoring.md) (раніше [ADR-0007](docs/adr/0007-vendor-and-dependency-updates.md))
 
 - **GitHub GraphQL batch fetch** — один GraphQL-запит на тік із field-aliases по всіх репо. Redis-декоратор `CachingReleaseProvider` (TTL 10 хв, MGET на read, pipeline SET на write, silent fallback при помилці Redis). → [ADR-0008](docs/adr/0008-github-graphql-batch-fetch.md)
 
@@ -78,7 +78,7 @@ type fullMailer interface {
 
 ```sh
 make build / run / test / vet / lint / lint-fix
-make tidy            # go mod tidy + go mod vendor (атомарно)
+make tidy            # go mod tidy
 make generate        # go generate ./... (мoki, swagger)
 make swagger         # перегенерувати docs/ зі swaggo
 make migrate-up / migrate-down

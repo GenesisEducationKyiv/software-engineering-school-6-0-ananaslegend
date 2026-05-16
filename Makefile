@@ -7,7 +7,7 @@ SWAG_VERSION          = v1.16.6
 .PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install
 
 build:
-	go build -mod=vendor -o $(BINARY) ./cmd/api
+	go build -o $(BINARY) ./cmd/api
 
 run:
 	go run ./cmd/api
@@ -20,7 +20,6 @@ gen:
 
 tidy:
 	go mod tidy
-	go mod vendor
 
 lint-install:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)

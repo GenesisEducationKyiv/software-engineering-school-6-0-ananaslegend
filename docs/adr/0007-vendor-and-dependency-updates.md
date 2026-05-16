@@ -1,6 +1,13 @@
 # ADR-0007: Vendor dependencies and batch weekly updates with cooldown
 
-Status: accepted · 2026-05-09 · @ananaslegend · security
+Status: superseded by [ADR-0014](0014-drop-vendoring.md) · 2026-05-09 · @ananaslegend · infra
+
+> **Superseded on 2026-05-16.** Vendoring was dropped because the corporate
+> SSL-proxy concern never materialised for this project, while the cost
+> (3 250+ tracked files, dedicated CI step, dependabot ritual workflow,
+> two-step `make tidy`) was felt every week. The supply-chain cooldown
+> argument is preserved by `.github/dependabot.yml`, not by `vendor/`.
+> See ADR-0014 for the current decision.
 
 ## Context
 

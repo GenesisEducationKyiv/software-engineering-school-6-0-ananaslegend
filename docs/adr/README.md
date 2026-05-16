@@ -15,13 +15,14 @@ This directory contains Architecture Decision Records (ADRs) for the
 | 0004 | [Transactions via context (`Transactor`)](0004-transactor-via-context.md) | persistence  | accepted | 2026-05-09 |
 | 0005 | [Wrap every error with package and method context](0005-error-wrapping-convention.md) | observability | accepted | 2026-05-09 |
 | 0006 | [Inject the logger through context](0006-logger-via-context.md)        | observability   | accepted | 2026-05-09 |
-| 0007 | [Vendor dependencies and batch weekly updates with cooldown](0007-vendor-and-dependency-updates.md) | infra | accepted | 2026-05-09 |
+| 0007 | [Vendor dependencies and batch weekly updates with cooldown](0007-vendor-and-dependency-updates.md) | infra | superseded by [0014](0014-drop-vendoring.md) | 2026-05-09 |
 | 0008 | [Use GitHub GraphQL for batch release fetching](0008-github-graphql-batch-fetch.md) | integrations | accepted | 2026-05-09 |
 | 0009 | [Generate API documentation from code annotations with `swaggo/swag`](0009-swagger-from-annotations.md) | http | accepted | 2026-05-09 |
 | 0010 | [Server-rendered HTML with embedded templates, no JS framework](0010-server-rendered-html-no-js.md) | http | accepted | 2026-05-09 |
 | 0011 | [Testing strategy — mock interfaces, run real for stateful systems](0011-testing-strategy.md) | testing | accepted | 2026-05-09 |
 | 0012 | [Host the service on Railway](0012-host-on-railway.md)                 | infra           | accepted | 2026-05-10 |
 | 0013 | [Use Resend as the email provider](0013-resend-email-provider.md)      | integrations    | accepted | 2026-05-10 |
+| 0014 | [Drop vendoring — rely on Go modules with the proxy cache](0014-drop-vendoring.md) | infra | accepted | 2026-05-16 |
 
 ## Conventions
 
