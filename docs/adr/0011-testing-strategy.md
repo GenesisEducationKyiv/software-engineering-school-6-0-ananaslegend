@@ -1,6 +1,6 @@
 # ADR-0011: Testing strategy — mock interfaces, run real for stateful systems
 
-Status: accepted · 2026-05-09 · @ananaslegend · testing
+Status: accepted · 2026-05-16 · @ananaslegend · testing
 
 ## Context
 

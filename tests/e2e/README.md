@@ -29,10 +29,5 @@ file under `tests/e2e/` is gated by `//go:build e2e`.
 
 ## Layout
 
-- `flow/full_flow_test.go` — single happy-path test covering the full
-  subscriber lifecycle: subscribe → confirm email → confirm via link →
-  release email → unsubscribe via link → assert no further emails.
-
-Shared fixtures (Postgres, Mailpit, GitHub REST/GraphQL doubles, Playwright
-wrapper, full-topology App) live in `tests/internal/` and are reused by the
+Shared fixtures live in `tests/internal/` and are reused by the
 integration suite under `tests/integration/`.
