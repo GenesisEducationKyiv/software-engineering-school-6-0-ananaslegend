@@ -1,0 +1,15 @@
+.env
+bin/
+*.test
+*.exe
+*.out
+.idea
+.superpowers
+api
+.worktrees/
+
+# Playwright MCP tool outputs
+.playwright-mcp/
+
+# Ad-hoc verification screenshots (kept locally only)
+swagger-verification.png
