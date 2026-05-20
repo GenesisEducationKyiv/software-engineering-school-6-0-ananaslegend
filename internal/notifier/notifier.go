@@ -12,6 +12,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
+	"github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -100,18 +101,19 @@ func (n *Notifier) Flush(ctx context.Context) {
 				return nil
 			}
 			p := items[0]
+
 			sendErr := n.mailer.SendRelease(ctx, domain.SendReleaseParams{
-				To:           p.Email,
-				RepoFullName: p.RepoOwner + "/" + p.RepoName,
-				ReleaseTag:   p.ReleaseTag,
-				ReleaseURL: fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s",
-					p.RepoOwner, p.RepoName, p.ReleaseTag),
-				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, p.UnsubscribeToken),
+				To:             p.Email,
+				RepoFullName:   p.RepoOwner + "/" + p.RepoName,
+				ReleaseTag:     p.ReleaseTag,
+				ReleaseURL:     github.ReleaseURL(p.RepoOwner, p.RepoName, p.ReleaseTag),
+				UnsubscribeURL: UnsubscribeURL(n.baseURL, p.UnsubscribeToken),
 			})
 			if sendErr != nil {
 				n.m.emailsSent.WithLabelValues("error").Inc()
 				return fmt.Errorf("notifier.Notifier.Flush: MailSender.SendRelease: %w", sendErr)
 			}
+
 			n.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = n.repo.MarkSent(ctx, p.ID); err != nil {
 				return fmt.Errorf("notifier.Notifier.Flush: Repository.MarkSent: %w", err)

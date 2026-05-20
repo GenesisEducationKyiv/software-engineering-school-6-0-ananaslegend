@@ -13,11 +13,15 @@ import (
 	subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 	"github.com/ananaslegend/reposeetory/internal/subscription/repository"
 	"github.com/ananaslegend/reposeetory/internal/subscription/service"
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 )
 
-func newHTTPServer(cfg config.Config, pool *pgxpool.Pool, log zerolog.Logger, reg *prometheus.Registry) *http.Server {
+func newHTTPServer(cfg config.Config, pool *pgxpool.Pool, txr transactor.Transactor, log zerolog.Logger, reg *prometheus.Registry) *http.Server {
+	repo := repository.New(pool)
 	svc := service.New(service.Config{
-		Repo:            repository.New(pool),
+		Tx:              txr,
+		Repo:            repo,
+		Confirms:        repo,
 		GitHub:          githubclient.NewClient(cfg.GitHubToken),
 		AppBaseURL:      cfg.AppBaseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,

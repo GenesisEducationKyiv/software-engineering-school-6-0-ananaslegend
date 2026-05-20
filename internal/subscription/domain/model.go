@@ -39,15 +39,9 @@ type SubscribeParams struct {
 	Repository string
 }
 
-type RepoExistsParams struct {
-	Owner string
-	Name  string
-}
+type RepoExistsParams = RepoRef
 
-type UpsertRepoParams struct {
-	Owner string
-	Name  string
-}
+type UpsertRepoParams = RepoRef
 
 type CreateSubscriptionParams struct {
 	Email                 string
