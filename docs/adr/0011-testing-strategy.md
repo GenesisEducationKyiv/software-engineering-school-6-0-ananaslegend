@@ -1,6 +1,11 @@
 # ADR-0011: Testing strategy — mock interfaces, run real for stateful systems
 
-Status: accepted · 2026-05-16 · @ananaslegend · testing
+> **⚠️ THIS ADR IS DEPRECATED — see the [index in README](README.md).**
+> Superseded by [ADR-0015](0015-testing-trophy.md) (philosophy) and
+> [`docs/testing.md`](../testing.md) (living per-layer rules and layout).
+> Kept for historical context only; do not treat its content as current.
+
+Status: superseded by [ADR-0015](0015-testing-trophy.md) + [`docs/testing.md`](../testing.md) · 2026-05-16 · @ananaslegend · testing
 
 ## Context
 
