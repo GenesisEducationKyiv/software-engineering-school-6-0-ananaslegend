@@ -143,3 +143,33 @@ func TestGetLatestReleases_BearerTokenSent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer mytoken", gotAuth)
 }
+
+func TestNew_AppliesDefaults(t *testing.T) {
+	c := New(Config{Token: "tok"})
+
+	assert.Equal(t, "tok", c.token)
+	assert.Equal(t, "https://api.github.com/graphql", c.graphqlURL)
+	assert.Equal(t, "https://api.github.com", c.restURL)
+	assert.NotNil(t, c.httpClient)
+}
+
+func TestNew_CustomURLsUsed(t *testing.T) {
+	var hitPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := New(Config{Token: "tok", RESTURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := c.RepoExists(context.Background(), domain.RepoExistsParams{Owner: "foo", Name: "bar"})
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/foo/bar", hitPath)
+}
+
+func TestNewClient_BackwardCompat(t *testing.T) {
+	c := New(Config{Token: "legacy-tok"})
+	assert.Equal(t, "legacy-tok", c.token)
+	assert.Equal(t, "https://api.github.com/graphql", c.graphqlURL)
+	assert.Equal(t, "https://api.github.com", c.restURL)
+}

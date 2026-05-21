@@ -4,7 +4,7 @@ DB_URL               ?= postgres://postgres:pass@localhost:5432/postgres?sslmode
 GOLANGCI_LINT_VERSION = latest
 SWAG_VERSION          = v1.16.6
 
-.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install
+.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install test-integration test-e2e test-all
 
 build:
 	go build -o $(BINARY) ./cmd/api
@@ -14,6 +14,15 @@ run:
 
 test:
 	go test ./...
+
+test-integration:
+	go test -tags=integration -count=1 ./tests/integration/...
+
+test-e2e:
+	go test -tags=e2e -count=1 ./tests/e2e/...
+
+test-all:
+	go test -tags=integration,e2e -count=1 -p 1 ./...
 
 gen:
 	go generate ./...

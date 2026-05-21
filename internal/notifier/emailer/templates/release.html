@@ -28,7 +28,7 @@
           <!-- Heading -->
           <tr>
             <td align="center" style="padding-bottom:10px;">
-              <h1 style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">New Release Published</h1>
+              <h1 data-testid="email-heading" style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">New Release Published</h1>
             </td>
           </tr>
 
@@ -44,7 +44,7 @@
           <!-- CTA -->
           <tr>
             <td align="center" style="padding-bottom:32px;">
-              <a href="{{.ReleaseURL}}"
+              <a data-testid="release-button" href="{{.ReleaseURL}}"
                  style="display:inline-block;background:#2563eb;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:11px 28px;border-radius:8px;">
                 View release →
               </a>
@@ -56,10 +56,10 @@
             <td align="center">
               <p style="margin:0 0 6px;font-size:12px;color:#475569;">Or copy this link:</p>
               <p style="margin:0 0 16px;font-size:12px;font-family:ui-monospace,'Cascadia Code',monospace;">
-                <a href="{{.ReleaseURL}}" style="color:#60a5fa;word-break:break-all;">{{.ReleaseURL}}</a>
+                <a data-testid="release-link" href="{{.ReleaseURL}}" style="color:#60a5fa;word-break:break-all;">{{.ReleaseURL}}</a>
               </p>
               <p style="margin:0;font-size:12px;color:#475569;">
-                Don't want notifications? <a href="{{.UnsubscribeURL}}" style="color:#60a5fa;">Unsubscribe</a>
+                Don't want notifications? <a data-testid="unsubscribe-link" href="{{.UnsubscribeURL}}" style="color:#60a5fa;">Unsubscribe</a>
               </p>
             </td>
           </tr>

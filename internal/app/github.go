@@ -13,7 +13,7 @@ import (
 )
 
 func newReleaseProvider(cfg config.Config, log zerolog.Logger, reg *prometheus.Registry, rdb *redis.Client) scanner.ReleaseProvider {
-	githubClient := githubclient.NewClient(cfg.GitHubToken)
+	githubClient := githubclient.New(githubclient.Config{Token: cfg.GitHubToken})
 
 	provider := githubclient.NewCachingClient(githubclient.CachingConfig{
 		Provider: githubClient,

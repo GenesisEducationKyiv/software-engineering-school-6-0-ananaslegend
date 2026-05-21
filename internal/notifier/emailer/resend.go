@@ -15,9 +15,18 @@ type ResendMailer struct {
 	from   string
 }
 
+// NewResendMailer wires the real Resend HTTP client against the public API.
+// Production callers stay unchanged.
 func NewResendMailer(apiKey, from string) *ResendMailer {
+	return NewResendMailerWithClient(resend.NewClient(apiKey), from)
+}
+
+// NewResendMailerWithClient is the seam unit tests use to inject a Resend
+// client whose BaseURL points at a httptest.Server. Production code does not
+// call this directly — use NewResendMailer.
+func NewResendMailerWithClient(client *resend.Client, from string) *ResendMailer {
 	return &ResendMailer{
-		client: resend.NewClient(apiKey),
+		client: client,
 		from:   from,
 	}
 }
