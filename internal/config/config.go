@@ -40,6 +40,15 @@ type Config struct {
 	ScannerInterval   time.Duration `envconfig:"SCANNER_INTERVAL" default:"5m"`
 	NotifierInterval  time.Duration `envconfig:"NOTIFIER_INTERVAL" default:"30s"`
 	ConfirmerInterval time.Duration `envconfig:"CONFIRMER_INTERVAL" default:"30s"`
+
+	// Observability — log shipper to Vector
+	VectorIngestURL         string        `envconfig:"VECTOR_INGEST_URL"`
+	LogServiceName          string        `envconfig:"LOG_SERVICE_NAME" default:"reposeetory"`
+	LogEnv                  string        `envconfig:"LOG_ENV" default:"development"`
+	LogVersion              string        `envconfig:"LOG_VERSION"`
+	LogShipperBufferSize    int           `envconfig:"LOG_SHIPPER_BUFFER_SIZE" default:"1024"`
+	LogShipperBatchSize     int           `envconfig:"LOG_SHIPPER_BATCH_SIZE" default:"50"`
+	LogShipperFlushInterval time.Duration `envconfig:"LOG_SHIPPER_FLUSH_INTERVAL" default:"2s"`
 }
 
 func Load() (Config, error) {
