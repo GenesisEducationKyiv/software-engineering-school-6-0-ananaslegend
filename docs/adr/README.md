@@ -23,6 +23,8 @@ This directory contains Architecture Decision Records (ADRs) for the
 | 0012 | [Host the service on Railway](0012-host-on-railway.md)                 | infra           | accepted | 2026-05-10 |
 | 0013 | [Use Resend as the email provider](0013-resend-email-provider.md)      | integrations    | accepted | 2026-05-10 |
 | 0014 | [Drop vendoring — rely on Go modules with the proxy cache](0014-drop-vendoring.md) | infra | accepted | 2026-05-16 |
+| 0017 | [Adopt Vector → Elasticsearch + vmagent → VictoriaMetrics + Grafana for observability](0017-observability-stack.md) | observability | accepted | 2026-06-03 |
+| 0018 | [Adopt RED metric conventions via a shared `redmetrics` helper](0018-red-metrics-conventions.md) | observability | accepted | 2026-06-03 |
 
 ## Conventions
 

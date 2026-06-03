@@ -5,7 +5,7 @@ Covers two environments:
 - **Local (docker-compose overlay)** — for development and end-to-end testing.
 - **Railway** — production hosting, one Railway service per stack component.
 
-For the *what* (specs, panels, env vars), see [`docs/superpowers/specs/2026-06-03-observability-design.md`](../superpowers/specs/2026-06-03-observability-design.md). For the *why* behind these choices see the ADR set in [`docs/adr/`](../adr/) — observability-stack and RED-conventions ADRs accompany this runbook.
+For the *what* (specs, panels, env vars), see [`docs/superpowers/specs/2026-06-03-observability-design.md`](../superpowers/specs/2026-06-03-observability-design.md). For the *why* behind these choices see [ADR-0017](../adr/0017-observability-stack.md) and [ADR-0018](../adr/0018-red-metrics-conventions.md).
 
 ## Local
 
