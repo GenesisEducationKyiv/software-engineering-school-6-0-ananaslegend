@@ -1,0 +1,38 @@
+[api]
+enabled = false
+
+[sources.app_logs]
+type = "http_server"
+address = "0.0.0.0:8686"
+path = "/ingest"
+encoding = "ndjson"
+method = "POST"
+
+[transforms.normalize]
+type = "remap"
+inputs = ["app_logs"]
+source = '''
+  if exists(.time) {
+    .@timestamp = del(.time)
+  }
+  if exists(.level) {
+    .level = downcase(string!(.level))
+  }
+  .host = get_env_var("HOSTNAME") ?? "unknown"
+'''
+
+[sinks.elasticsearch]
+type = "elasticsearch"
+inputs = ["normalize"]
+endpoints = ["${ES_URL:-http://elasticsearch:9200}"]
+bulk.index = "reposeetory-logs"
+mode = "bulk"
+auth.strategy = "basic"
+auth.user = "${ES_USER:-elastic}"
+auth.password = "${ES_PASSWORD:-changeme}"
+healthcheck.enabled = true
+
+[sinks.elasticsearch.buffer]
+type = "disk"
+max_size = 268435456
+when_full = "drop_newest"

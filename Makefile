@@ -4,7 +4,7 @@ DB_URL               ?= postgres://postgres:pass@localhost:5432/postgres?sslmode
 GOLANGCI_LINT_VERSION = latest
 SWAG_VERSION          = v1.16.6
 
-.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install
+.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install obs-up obs-down obs-init
 
 build:
 	go build -o $(BINARY) ./cmd/api
@@ -54,3 +54,12 @@ docker-down:
 
 docker-clean:
 	docker compose down -v
+
+obs-up:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+
+obs-down:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml down
+
+obs-init:
+	./scripts/obs-init.sh
