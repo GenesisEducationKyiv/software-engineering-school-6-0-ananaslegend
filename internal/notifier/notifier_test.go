@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/mock/gomock"
 
 	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/notifier"
 	"github.com/ananaslegend/reposeetory/internal/notifier/mocks"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -25,7 +27,12 @@ func newNotifier(t *testing.T) (*notifier.Notifier, *txmocks.MockTransactor, *mo
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
-	n := notifier.New(notifier.Config{Tx: tx, Repo: repo, Mailer: m})
+	n := notifier.New(notifier.Config{
+		Tx:     tx,
+		Repo:   repo,
+		Mailer: m,
+		RED:    redmetrics.New(redmetrics.Config{Subsystem: "notifier"}),
+	})
 	return n, tx, repo, m
 }
 
@@ -115,7 +122,13 @@ func newNotifierWithRegistry(t *testing.T) (*notifier.Notifier, *txmocks.MockTra
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
 	reg := prometheus.NewRegistry()
-	n := notifier.New(notifier.Config{Tx: tx, Repo: repo, Mailer: m, Registry: reg})
+	n := notifier.New(notifier.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "notifier", Registry: reg}),
+	})
 	return n, tx, repo, m, reg
 }
 
@@ -141,4 +154,44 @@ func TestNotifier_Flush_IncrementsEmailSentMetric(t *testing.T) {
 		notifier_emails_sent_total{result="ok"} 1
 	`)
 	require.NoError(t, testutil.GatherAndCompare(reg, expected, "notifier_emails_sent_total"))
+}
+
+func TestNotifier_FlushRecordsRED(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	tx := txmocks.NewMockTransactor(ctrl)
+	repo := mocks.NewMockRepository(ctrl)
+	m := mocks.NewMockMailSender(ctrl)
+	reg := prometheus.NewRegistry()
+	n := notifier.New(notifier.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "notifier", Registry: reg}),
+	})
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil)
+
+	n.Flush(context.Background())
+
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	if !hasMetric(families, "notifier_requests_total") {
+		t.Fatalf("notifier_requests_total missing")
+	}
+	if !hasMetric(families, "notifier_request_duration_seconds") {
+		t.Fatalf("notifier_request_duration_seconds missing")
+	}
+}
+
+func hasMetric(families []*dto.MetricFamily, name string) bool {
+	for _, f := range families {
+		if f.GetName() == name {
+			return true
+		}
+	}
+	return false
 }

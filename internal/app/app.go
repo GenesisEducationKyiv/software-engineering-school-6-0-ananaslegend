@@ -44,16 +44,17 @@ func Run(ctx context.Context) {
 	}
 
 	metricRegistry := newMetricsRegistry(pool)
+	r := newREDs(metricRegistry)
 
-	mailSender, err := newEmailer(cfg, log)
+	mailSender, err := newEmailer(cfg, log, r.Email)
 	if err != nil {
 		log.Fatal().Err(err).Msg("create mailer")
 	}
 
-	releaseProvider := newReleaseProvider(cfg, log, metricRegistry, rdb)
+	releaseProvider := newReleaseProvider(cfg, log, metricRegistry, rdb, r.GithubClient)
 
 	var cronsWG sync.WaitGroup
-	runWorkers(ctx, &cronsWG, cfg, txr, pool, mailSender, releaseProvider, metricRegistry)
+	runWorkers(ctx, &cronsWG, cfg, txr, pool, mailSender, releaseProvider, metricRegistry, r)
 
 	srv := newHTTPServer(cfg, pool, log, metricRegistry)
 

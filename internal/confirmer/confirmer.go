@@ -12,6 +12,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -43,6 +44,7 @@ type Config struct {
 	Interval time.Duration
 	BaseURL  string
 	Registry *prometheus.Registry
+	RED      *redmetrics.RED // flush: result=ok|empty|error
 }
 
 // Confirmer periodically drains the confirmation_notifications outbox by sending emails.
@@ -53,6 +55,7 @@ type Confirmer struct {
 	interval time.Duration
 	baseURL  string
 	m        confirmerMetrics
+	red      *redmetrics.RED
 }
 
 const confirmLimit = 1
@@ -66,6 +69,7 @@ func New(cfg Config) *Confirmer {
 		interval: cfg.Interval,
 		baseURL:  cfg.BaseURL,
 		m:        newConfirmerMetrics(cfg.Registry),
+		red:      cfg.RED,
 	}
 }
 
@@ -85,6 +89,22 @@ func (c *Confirmer) Run(ctx context.Context) {
 
 // Flush drains all currently pending confirmations. Exported for testing.
 func (c *Confirmer) Flush(ctx context.Context) {
+	start := time.Now()
+	processedAny := false
+	var flushErr error
+
+	defer func() {
+		dur := time.Since(start)
+		switch {
+		case flushErr != nil:
+			c.red.Observe("error", dur)
+		case !processedAny:
+			c.red.Observe("empty", dur)
+		default:
+			c.red.Observe("ok", dur)
+		}
+	}()
+
 	for {
 		var processed bool
 		err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
@@ -113,11 +133,13 @@ func (c *Confirmer) Flush(ctx context.Context) {
 			return nil
 		})
 		if err != nil {
+			flushErr = err
 			zerolog.Ctx(ctx).Error().Err(err).Msg("confirmer: process next failed")
 			return
 		}
 		if !processed {
 			return
 		}
+		processedAny = true
 	}
 }

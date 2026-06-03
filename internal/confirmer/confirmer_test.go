@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/mock/gomock"
 
 	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -25,7 +27,13 @@ func newConfirmer(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, 
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
-	c := confirmer.New(confirmer.Config{Tx: tx, Repo: repo, Mailer: m, BaseURL: "http://localhost:8080"})
+	c := confirmer.New(confirmer.Config{
+		Tx:      tx,
+		Repo:    repo,
+		Mailer:  m,
+		BaseURL: "http://localhost:8080",
+		RED:     redmetrics.New(redmetrics.Config{Subsystem: "confirmer"}),
+	})
 	return c, tx, repo, m
 }
 
@@ -112,7 +120,14 @@ func newConfirmerWithRegistry(t *testing.T) (*confirmer.Confirmer, *txmocks.Mock
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
 	reg := prometheus.NewRegistry()
-	c := confirmer.New(confirmer.Config{Tx: tx, Repo: repo, Mailer: m, BaseURL: "http://localhost:8080", Registry: reg})
+	c := confirmer.New(confirmer.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		BaseURL:  "http://localhost:8080",
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "confirmer", Registry: reg}),
+	})
 	return c, tx, repo, m, reg
 }
 
@@ -138,4 +153,45 @@ func TestConfirmer_Flush_IncrementsEmailSentMetric(t *testing.T) {
 		confirmer_emails_sent_total{result="ok"} 1
 	`)
 	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_emails_sent_total"))
+}
+
+func TestConfirmer_FlushRecordsRED(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	tx := txmocks.NewMockTransactor(ctrl)
+	repo := mocks.NewMockRepository(ctrl)
+	m := mocks.NewMockMailSender(ctrl)
+	reg := prometheus.NewRegistry()
+	c := confirmer.New(confirmer.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		BaseURL:  "http://localhost:8080",
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "confirmer", Registry: reg}),
+	})
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil)
+
+	c.Flush(context.Background())
+
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	if !hasMetric(families, "confirmer_requests_total") {
+		t.Fatalf("confirmer_requests_total missing")
+	}
+	if !hasMetric(families, "confirmer_request_duration_seconds") {
+		t.Fatalf("confirmer_request_duration_seconds missing")
+	}
+}
+
+func hasMetric(families []*dto.MetricFamily, name string) bool {
+	for _, f := range families {
+		if f.GetName() == name {
+			return true
+		}
+	}
+	return false
 }

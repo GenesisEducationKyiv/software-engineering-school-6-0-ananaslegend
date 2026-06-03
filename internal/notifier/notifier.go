@@ -12,6 +12,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -44,6 +45,7 @@ type Config struct {
 	Interval time.Duration
 	BaseURL  string
 	Registry *prometheus.Registry
+	RED      *redmetrics.RED // flush: result=ok|empty|error
 }
 
 // Notifier periodically drains the release_notifications outbox by sending emails.
@@ -54,6 +56,7 @@ type Notifier struct {
 	interval time.Duration
 	baseURL  string
 	m        notifierMetrics
+	red      *redmetrics.RED
 }
 
 const notifyLimit = 1
@@ -67,6 +70,7 @@ func New(cfg Config) *Notifier {
 		interval: cfg.Interval,
 		baseURL:  cfg.BaseURL,
 		m:        newNotifierMetrics(cfg.Registry),
+		red:      cfg.RED,
 	}
 }
 
@@ -87,7 +91,21 @@ func (n *Notifier) Run(ctx context.Context) {
 // Flush drains all currently pending notifications. Exported for testing.
 func (n *Notifier) Flush(ctx context.Context) {
 	start := time.Now()
-	defer func() { n.m.flushDuration.Observe(time.Since(start).Seconds()) }()
+	processedAny := false
+	var flushErr error
+
+	defer func() {
+		dur := time.Since(start)
+		n.m.flushDuration.Observe(dur.Seconds())
+		switch {
+		case flushErr != nil:
+			n.red.Observe("error", dur)
+		case !processedAny:
+			n.red.Observe("empty", dur)
+		default:
+			n.red.Observe("ok", dur)
+		}
+	}()
 
 	for {
 		var processed bool
@@ -120,11 +138,13 @@ func (n *Notifier) Flush(ctx context.Context) {
 			return nil
 		})
 		if err != nil {
+			flushErr = err
 			zerolog.Ctx(ctx).Error().Err(err).Msg("notifier: process next failed")
 			return
 		}
 		if !processed {
 			return
 		}
+		processedAny = true
 	}
 }

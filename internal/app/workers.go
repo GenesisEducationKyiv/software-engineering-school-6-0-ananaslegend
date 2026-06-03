@@ -28,6 +28,7 @@ func runWorkers(
 	mail emailer.Emailer,
 	releases scanner.ReleaseProvider,
 	reg *prometheus.Registry,
+	r reds,
 ) {
 	scan := scanner.New(scanner.Config{
 		Tx:       txr,
@@ -35,8 +36,9 @@ func runWorkers(
 		GitHub:   releases,
 		Interval: cfg.ScannerInterval,
 		Registry: reg,
+		RED:      r.Scanner,
 	})
-	wg.Go(func() { ; scan.Run(ctx) })
+	wg.Go(func() { scan.Run(ctx) })
 
 	notify := notifier.New(notifier.Config{
 		Tx:       txr,
@@ -45,8 +47,9 @@ func runWorkers(
 		Interval: cfg.NotifierInterval,
 		BaseURL:  cfg.AppBaseURL,
 		Registry: reg,
+		RED:      r.Notifier,
 	})
-	wg.Go(func() { ; notify.Run(ctx) })
+	wg.Go(func() { notify.Run(ctx) })
 
 	confirm := confirmer.New(confirmer.Config{
 		Tx:       txr,
@@ -55,6 +58,7 @@ func runWorkers(
 		Interval: cfg.ConfirmerInterval,
 		BaseURL:  cfg.AppBaseURL,
 		Registry: reg,
+		RED:      r.Confirmer,
 	})
-	wg.Go(func() { ; confirm.Run(ctx) })
+	wg.Go(func() { confirm.Run(ctx) })
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -36,6 +37,7 @@ type Config struct {
 	GitHub   ReleaseProvider
 	Interval time.Duration
 	Registry *prometheus.Registry
+	RED      *redmetrics.RED // ticks: result=ok|error|empty|rate_limited
 }
 
 // Scanner periodically checks GitHub for new releases and writes outbox rows.
@@ -45,6 +47,7 @@ type Scanner struct {
 	github   ReleaseProvider
 	interval time.Duration
 	m        scannerMetrics
+	red      *redmetrics.RED
 }
 
 const scanLimit = 100
@@ -57,6 +60,7 @@ func New(cfg Config) *Scanner {
 		github:   cfg.GitHub,
 		interval: cfg.Interval,
 		m:        newScannerMetrics(cfg.Registry),
+		red:      cfg.RED,
 	}
 }
 
@@ -79,6 +83,8 @@ func (s *Scanner) Run(ctx context.Context) {
 
 // Tick executes one scan cycle. Exported for testing.
 func (s *Scanner) Tick(ctx context.Context) error {
+	start := time.Now()
+	var emptyRun bool
 	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		repos, err := s.repo.GetRepositoriesWithLock(ctx, scanLimit)
 		if err != nil {
@@ -86,6 +92,7 @@ func (s *Scanner) Tick(ctx context.Context) error {
 		}
 
 		if len(repos) == 0 {
+			emptyRun = true
 			return nil
 		}
 		s.m.reposScanned.Add(float64(len(repos)))
@@ -110,17 +117,26 @@ func (s *Scanner) Tick(ctx context.Context) error {
 		}
 		return nil
 	})
+
+	dur := time.Since(start)
+
 	if err != nil {
 		if errors.Is(err, githubclient.ErrRateLimited) {
 			s.m.rateLimitedTotal.Inc()
-			s.m.ticksTotal.WithLabelValues("rate_limited").Inc()
+			s.red.Observe("rate_limited", dur)
 			zerolog.Ctx(ctx).Warn().Err(err).Msg("github rate limited, skipping tick")
 			return nil
 		}
-		s.m.ticksTotal.WithLabelValues("error").Inc()
+		s.red.Observe("error", dur)
 		return fmt.Errorf("scanner.Scanner.Tick: %w", err)
 	}
-	s.m.ticksTotal.WithLabelValues("ok").Inc()
+
+	switch {
+	case emptyRun:
+		s.red.Observe("empty", dur)
+	default:
+		s.red.Observe("ok", dur)
+	}
 	return nil
 }
 
