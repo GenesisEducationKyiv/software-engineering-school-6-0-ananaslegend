@@ -34,5 +34,5 @@ healthcheck.enabled = true
 
 [sinks.elasticsearch.buffer]
 type = "disk"
-max_size = 268435456
+max_size = 536870912
 when_full = "drop_newest"

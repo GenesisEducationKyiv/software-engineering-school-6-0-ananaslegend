@@ -27,6 +27,7 @@ services:
 
   vector:
     image: timberio/vector:0.38.0-alpine
+    command: ["--config", "/etc/vector/vector.toml"]
     depends_on:
       elasticsearch:
         condition: service_healthy

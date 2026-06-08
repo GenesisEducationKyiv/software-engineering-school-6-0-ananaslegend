@@ -2,13 +2,13 @@ global:
   scrape_interval: 15s
   external_labels:
     service: reposeetory
-    env: ${ENV:-development}
+    env: "%{ENV}"
 
 scrape_configs:
   - job_name: reposeetory
     metrics_path: /metrics
     static_configs:
       - targets:
-          - ${APP_METRICS_TARGET:-api:8080}
+          - "%{APP_METRICS_TARGET}"
         labels:
           instance: reposeetory-api
