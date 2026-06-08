@@ -89,21 +89,8 @@ func (c *Confirmer) Run(ctx context.Context) {
 
 // Flush drains all currently pending confirmations. Exported for testing.
 func (c *Confirmer) Flush(ctx context.Context) {
-	start := time.Now()
-	processedAny := false
-	var flushErr error
-
-	defer func() {
-		dur := time.Since(start)
-		switch {
-		case flushErr != nil:
-			c.red.Observe("error", dur)
-		case !processedAny:
-			c.red.Observe("empty", dur)
-		default:
-			c.red.Observe("ok", dur)
-		}
-	}()
+	ctx, stop := redmetrics.Start(ctx, c.red)
+	defer stop()
 
 	for {
 		var processed bool
@@ -133,13 +120,15 @@ func (c *Confirmer) Flush(ctx context.Context) {
 			return nil
 		})
 		if err != nil {
-			flushErr = err
+			redmetrics.SetError(ctx)
 			zerolog.Ctx(ctx).Error().Err(err).Msg("confirmer: process next failed")
 			return
 		}
 		if !processed {
-			return
+			return // queue empty — nothing more to send
 		}
-		processedAny = true
+		// Sent one: this flush did useful work. An empty flush never reaches
+		// here, so it records no RED sample (skip-by-default).
+		redmetrics.SetSuccess(ctx)
 	}
 }

@@ -1,15 +1,19 @@
 // Package redmetrics provides a small helper for the RED methodology
 // (rate / errors / duration) — a uniform counter + histogram pair per subsystem.
 //
-// Usage:
+// Usage with the ctx-based API:
 //
-//	m := redmetrics.New(redmetrics.Config{Subsystem: "github_client", Registry: reg})
-//	start := time.Now()
-//	...
-//	m.Observe("ok", time.Since(start))
+//	ctx, stop := redmetrics.Start(ctx, n.red)
+//	defer stop()
+//	if err != nil { redmetrics.SetError(ctx); return }
+//	redmetrics.SetSuccess(ctx)
+//
+// If no setter is called before stop, no observation is recorded — this makes
+// "no work to do" branches naturally invisible in the metric stream.
 package redmetrics
 
 import (
+	"context"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -72,4 +76,54 @@ func (m *RED) Observe(result string, dur time.Duration, extraLabels ...string) {
 	values := append([]string{result}, extraLabels...)
 	m.requests.WithLabelValues(values...).Inc()
 	m.duration.WithLabelValues(values...).Observe(dur.Seconds())
+}
+
+type recorderKey struct{}
+
+type recorder struct {
+	red    *RED
+	start  time.Time
+	extras []string
+	result string
+}
+
+// Start binds a recorder to ctx and returns a derived ctx plus a stop closure.
+//
+// The recorder starts in skip mode: if stop() fires without any setter
+// (SetSuccess / SetError / SetResult) having been called, no observation is
+// recorded.
+//
+// Nil-safe: when m is nil, Start returns the original ctx and a no-op stop.
+func Start(ctx context.Context, m *RED, extraLabels ...string) (context.Context, func()) {
+	if m == nil {
+		return ctx, func() {}
+	}
+	r := &recorder{red: m, start: time.Now()}
+	if len(extraLabels) > 0 {
+		r.extras = append([]string(nil), extraLabels...)
+	}
+	return context.WithValue(ctx, recorderKey{}, r), func() {
+		// No setter called → treat as "no work to do"; skip both counter and histogram.
+		if r.result == "" {
+			return
+		}
+		m.Observe(r.result, time.Since(r.start), r.extras...)
+	}
+}
+
+// SetSuccess marks the operation bound to ctx as "ok".
+func SetSuccess(ctx context.Context) { setResult(ctx, "ok") }
+
+// SetError marks the operation bound to ctx as "error".
+func SetError(ctx context.Context) { setResult(ctx, "error") }
+
+// SetResult marks the operation bound to ctx with a domain-specific label
+// (e.g. "rate_limited" for scanner, "cached" for github_client).
+// Prefer SetSuccess / SetError for the universal cases.
+func SetResult(ctx context.Context, result string) { setResult(ctx, result) }
+
+func setResult(ctx context.Context, result string) {
+	if r, ok := ctx.Value(recorderKey{}).(*recorder); ok {
+		r.result = result
+	}
 }

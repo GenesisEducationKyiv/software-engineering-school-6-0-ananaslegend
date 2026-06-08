@@ -12,12 +12,29 @@ Introduce a single helper at `internal/observability/redmetrics` that produces o
 
 - **Counter name:** `<subsystem>_requests_total`.
 - **Histogram name:** `<subsystem>_request_duration_seconds`.
-- **Mandatory label:** `result`, with bounded values `ok | error`. Subsystem may add domain-specific values (e.g. `cached` for github_client, `empty` and `rate_limited` for scanner).
+- **Mandatory label:** `result`, with bounded values `ok | error`. Subsystem may add domain-specific values (e.g. `cached` for github_client, `rate_limited` for scanner). Workers emit no sample for idle ticks (see the call-site API note below).
 - **Extra labels** must be a fixed, bounded enum (e.g. `driver={resend,smtp,stub}` for email). High-cardinality labels (user_id, email, repo full-name, error message) are forbidden.
 - **HTTP exception:** the existing `http_requests_total{method,path,status}` and `http_request_duration_seconds{method,path}` are kept as-is. Renaming them would invalidate load-test baselines (ADR-0016). The HTTP layer uses `status` as the discriminator instead of `result`.
 - **Bucket defaults:** sub-second pairs (HTTP, GitHub, email) use `DefaultBuckets` (`[0.005 … 30]`); long-running ticks (scanner/notifier/confirmer) use `longBuckets` (`[0.05 … 120]`).
 
 The helper is consumed via `Config.RED *redmetrics.RED` fields on each feature's `Config` struct, following the Registry-as-dependency pattern from [ADR-0011](0011-testing-strategy.md).
+
+### Call-site API: `Start` + named setters
+
+Call sites use a ctx-based recorder rather than direct `Observe` or a pointer-mutated result variable:
+
+```go
+ctx, stop := redmetrics.Start(ctx, n.red)
+defer stop()
+if err != nil { redmetrics.SetError(ctx); return }
+redmetrics.SetSuccess(ctx)
+```
+
+`Start` binds a recorder to ctx; `SetSuccess` / `SetError` / `SetResult` mark the result label; `stop` emits the observation in a deferred closure. The recorder defaults to **skip mode** — if no setter is called before `stop` fires, no observation is recorded. This makes "no work to do" branches naturally invisible in the rate / duration series; liveness is covered by Prometheus' built-in `up` metric.
+
+This mirrors the project's existing pattern for cross-cutting concerns (logger via [ADR-0006](0006-logger-via-context.md), transaction via [ADR-0004](0004-transactor-via-context.md)).
+
+`Observe` remains available for decorator-style instrumentation (`emailermetrics.Wrap`, `github.CachingReleaseProvider`) where wrapping a single call needs a direct one-shot recording rather than the bind/setter/stop dance.
 
 ## Consequences
 
@@ -39,3 +56,4 @@ The helper is consumed via `Config.RED *redmetrics.RED` fields on each feature's
 - `internal/observability/emailermetrics/` — RED decorator over the emailer interface.
 - `internal/observability/outboxcollector/` — outbox depth gauges (not RED, but registered alongside).
 - Related: [ADR-0011](0011-testing-strategy.md), [ADR-0017](0017-observability-stack.md).
+- Related: [ADR-0006](0006-logger-via-context.md), [ADR-0004](0004-transactor-via-context.md) — ctx-based cross-cutting concerns pattern.

@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/mock/gomock"
 
 	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
@@ -156,42 +155,37 @@ func TestConfirmer_Flush_IncrementsEmailSentMetric(t *testing.T) {
 }
 
 func TestConfirmer_FlushRecordsRED(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	tx := txmocks.NewMockTransactor(ctrl)
-	repo := mocks.NewMockRepository(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
-	reg := prometheus.NewRegistry()
-	c := confirmer.New(confirmer.Config{
-		Tx:       tx,
-		Repo:     repo,
-		Mailer:   m,
-		BaseURL:  "http://localhost:8080",
-		Registry: reg,
-		RED:      redmetrics.New(redmetrics.Config{Subsystem: "confirmer", Registry: reg}),
-	})
+	c, tx, repo, m, reg := newConfirmerWithRegistry(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil)
+
+	c.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP confirmer_requests_total Total number of confirmer operations.
+		# TYPE confirmer_requests_total counter
+		confirmer_requests_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_requests_total"))
+}
+
+func TestConfirmer_EmptyFlushEmitsNoREDSample(t *testing.T) {
+	c, tx, repo, _, reg := newConfirmerWithRegistry(t)
 
 	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
 	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil)
 
 	c.Flush(context.Background())
 
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("Gather: %v", err)
-	}
-	if !hasMetric(families, "confirmer_requests_total") {
-		t.Fatalf("confirmer_requests_total missing")
-	}
-	if !hasMetric(families, "confirmer_request_duration_seconds") {
-		t.Fatalf("confirmer_request_duration_seconds missing")
-	}
-}
-
-func hasMetric(families []*dto.MetricFamily, name string) bool {
-	for _, f := range families {
-		if f.GetName() == name {
-			return true
-		}
-	}
-	return false
+	// Empty flush must emit no RED sample at all — the metric family is absent.
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(""), "confirmer_requests_total"))
 }

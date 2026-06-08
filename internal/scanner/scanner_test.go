@@ -200,6 +200,74 @@ func TestScanner_TickRecordsRED(t *testing.T) {
 	}
 }
 
+func TestScanner_Tick_RateLimitedRecordsRateLimitedLabel(t *testing.T) {
+	s, tx, repo, gh, reg := newScannerWithRegistry(t)
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar"}}
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
+	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(nil, githubclient.ErrRateLimited)
+
+	err := s.Tick(context.Background())
+	require.NoError(t, err) // rate-limit is swallowed
+
+	expected := strings.NewReader(`
+		# HELP scanner_github_rate_limited_total Total number of ticks skipped due to GitHub 429 rate limiting.
+		# TYPE scanner_github_rate_limited_total counter
+		scanner_github_rate_limited_total 1
+		# HELP scanner_requests_total Total number of scanner operations.
+		# TYPE scanner_requests_total counter
+		scanner_requests_total{result="rate_limited"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected,
+		"scanner_github_rate_limited_total",
+		"scanner_requests_total",
+	))
+}
+
+func TestScanner_Tick_GenericErrorRecordsErrorLabel(t *testing.T) {
+	s, tx, repo, gh, reg := newScannerWithRegistry(t)
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "foo", Name: "bar"}}
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(repos, nil)
+	gh.EXPECT().GetLatestReleases(gomock.Any(), gomock.Any()).Return(nil, errors.New("github unavailable"))
+
+	err := s.Tick(context.Background())
+	require.Error(t, err)
+
+	expected := strings.NewReader(`
+		# HELP scanner_requests_total Total number of scanner operations.
+		# TYPE scanner_requests_total counter
+		scanner_requests_total{result="error"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "scanner_requests_total"))
+}
+
+func TestScanner_Tick_EmptyRunEmitsNoREDSample(t *testing.T) {
+	s, tx, repo, _, reg := newScannerWithRegistry(t)
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetRepositoriesWithLock(gomock.Any(), 100).Return(nil, nil)
+
+	err := s.Tick(context.Background())
+	require.NoError(t, err)
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+	for _, f := range families {
+		if f.GetName() == "scanner_requests_total" {
+			for _, m := range f.GetMetric() {
+				if m.GetCounter().GetValue() != 0 {
+					t.Fatalf("expected scanner_requests_total counter 0, got %v", m.GetCounter().GetValue())
+				}
+			}
+		}
+	}
+}
+
 func hasMetric(families []*dto.MetricFamily, name string) bool {
 	for _, f := range families {
 		if f.GetName() == name {

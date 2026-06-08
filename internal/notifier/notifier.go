@@ -91,21 +91,9 @@ func (n *Notifier) Run(ctx context.Context) {
 // Flush drains all currently pending notifications. Exported for testing.
 func (n *Notifier) Flush(ctx context.Context) {
 	start := time.Now()
-	processedAny := false
-	var flushErr error
-
-	defer func() {
-		dur := time.Since(start)
-		n.m.flushDuration.Observe(dur.Seconds())
-		switch {
-		case flushErr != nil:
-			n.red.Observe("error", dur)
-		case !processedAny:
-			n.red.Observe("empty", dur)
-		default:
-			n.red.Observe("ok", dur)
-		}
-	}()
+	ctx, stop := redmetrics.Start(ctx, n.red)
+	defer stop()
+	defer func() { n.m.flushDuration.Observe(time.Since(start).Seconds()) }()
 
 	for {
 		var processed bool
@@ -138,13 +126,15 @@ func (n *Notifier) Flush(ctx context.Context) {
 			return nil
 		})
 		if err != nil {
-			flushErr = err
+			redmetrics.SetError(ctx)
 			zerolog.Ctx(ctx).Error().Err(err).Msg("notifier: process next failed")
 			return
 		}
 		if !processed {
-			return
+			return // queue empty — nothing more to send
 		}
-		processedAny = true
+		// Sent one: this flush did useful work. An empty flush never reaches
+		// here, so it records no RED sample (skip-by-default).
+		redmetrics.SetSuccess(ctx)
 	}
 }

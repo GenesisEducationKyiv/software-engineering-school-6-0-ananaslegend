@@ -37,7 +37,7 @@ type Config struct {
 	GitHub   ReleaseProvider
 	Interval time.Duration
 	Registry *prometheus.Registry
-	RED      *redmetrics.RED // ticks: result=ok|error|empty|rate_limited
+	RED      *redmetrics.RED
 }
 
 // Scanner periodically checks GitHub for new releases and writes outbox rows.
@@ -83,7 +83,9 @@ func (s *Scanner) Run(ctx context.Context) {
 
 // Tick executes one scan cycle. Exported for testing.
 func (s *Scanner) Tick(ctx context.Context) error {
-	start := time.Now()
+	ctx, stop := redmetrics.Start(ctx, s.red)
+	defer stop()
+
 	var emptyRun bool
 	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		repos, err := s.repo.GetRepositoriesWithLock(ctx, scanLimit)
@@ -118,26 +120,26 @@ func (s *Scanner) Tick(ctx context.Context) error {
 		return nil
 	})
 
-	dur := time.Since(start)
-
 	if err != nil {
 		if errors.Is(err, githubclient.ErrRateLimited) {
-			s.m.rateLimitedTotal.Inc()
-			s.red.Observe("rate_limited", dur)
-			zerolog.Ctx(ctx).Warn().Err(err).Msg("github rate limited, skipping tick")
+			s.handleRateLimitedError(ctx, err)
+
 			return nil
 		}
-		s.red.Observe("error", dur)
+		redmetrics.SetError(ctx)
 		return fmt.Errorf("scanner.Scanner.Tick: %w", err)
 	}
 
-	switch {
-	case emptyRun:
-		s.red.Observe("empty", dur)
-	default:
-		s.red.Observe("ok", dur)
+	if !emptyRun {
+		redmetrics.SetSuccess(ctx)
 	}
 	return nil
+}
+
+func (s *Scanner) handleRateLimitedError(ctx context.Context, err error) {
+	s.m.rateLimitedTotal.Inc()
+	redmetrics.SetResult(ctx, "rate_limited")
+	zerolog.Ctx(ctx).Warn().Err(err).Msg("github rate limited, skipping tick")
 }
 
 // First time seeing a release — no notification.

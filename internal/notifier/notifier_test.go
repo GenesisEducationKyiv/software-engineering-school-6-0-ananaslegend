@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/mock/gomock"
 
 	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
@@ -157,41 +156,37 @@ func TestNotifier_Flush_IncrementsEmailSentMetric(t *testing.T) {
 }
 
 func TestNotifier_FlushRecordsRED(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	tx := txmocks.NewMockTransactor(ctrl)
-	repo := mocks.NewMockRepository(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
-	reg := prometheus.NewRegistry()
-	n := notifier.New(notifier.Config{
-		Tx:       tx,
-		Repo:     repo,
-		Mailer:   m,
-		Registry: reg,
-		RED:      redmetrics.New(redmetrics.Config{Subsystem: "notifier", Registry: reg}),
-	})
+	n, tx, repo, m, reg := newNotifierWithRegistry(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return([]notifier.PendingNotification{testPending}, nil),
+		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendRelease(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil)
+
+	n.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP notifier_requests_total Total number of notifier operations.
+		# TYPE notifier_requests_total counter
+		notifier_requests_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "notifier_requests_total"))
+}
+
+func TestNotifier_EmptyFlushEmitsNoREDSample(t *testing.T) {
+	n, tx, repo, _, reg := newNotifierWithRegistry(t)
 
 	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
 	repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil)
 
 	n.Flush(context.Background())
 
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("Gather: %v", err)
-	}
-	if !hasMetric(families, "notifier_requests_total") {
-		t.Fatalf("notifier_requests_total missing")
-	}
-	if !hasMetric(families, "notifier_request_duration_seconds") {
-		t.Fatalf("notifier_request_duration_seconds missing")
-	}
-}
-
-func hasMetric(families []*dto.MetricFamily, name string) bool {
-	for _, f := range families {
-		if f.GetName() == name {
-			return true
-		}
-	}
-	return false
+	// Empty flush must emit no RED sample at all — the metric family is absent.
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(""), "notifier_requests_total"))
 }
