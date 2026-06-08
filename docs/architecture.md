@@ -305,3 +305,28 @@ Key knobs that shape runtime behaviour:
 | Swagger from annotations         | [0009](./adr/0009-swagger-from-annotations.md) |
 | Server-rendered HTML, no JS      | [0010](./adr/0010-server-rendered-html-no-js.md) |
 | Testing strategy                 | [0011](./adr/0011-testing-strategy.md) |
+
+---
+
+## 8. Observability
+
+```mermaid
+flowchart LR
+    APP[reposeetory<br/>Go binary]
+    VEC[Vector<br/>HTTP source]
+    ES[(Elasticsearch<br/>single-node)]
+    KB[Kibana]
+    VMA[vmagent]
+    VMS[(VictoriaMetrics<br/>vmsingle)]
+    GF[Grafana]
+
+    APP -->|stdout JSON| OPS([operator])
+    APP -->|HTTP POST /ingest| VEC
+    VEC -->|bulk index| ES
+    ES <--> KB
+    APP -->|/metrics| VMA
+    VMA -->|remote_write| VMS
+    VMS <--> GF
+```
+
+App-side details: zerolog `MultiLevelWriter` duplicates each event to both stdout and the in-process log shipper, which batches and POSTs to Vector. The pipeline is fail-open: shipper buffer overflows and POST failures increment counters but never block the app. RED instrumentation lives in `internal/observability/redmetrics` (see [ADR-0018](./adr/0018-red-metrics-conventions.md)). The full stack composition and runbook is in [`docs/operations/observability.md`](./operations/observability.md). The stack choice is documented in [ADR-0017](./adr/0017-observability-stack.md).

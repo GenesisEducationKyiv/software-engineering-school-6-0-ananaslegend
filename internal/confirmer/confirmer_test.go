@@ -16,6 +16,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -25,7 +26,13 @@ func newConfirmer(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, 
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
-	c := confirmer.New(confirmer.Config{Tx: tx, Repo: repo, Mailer: m, BaseURL: "http://localhost:8080"})
+	c := confirmer.New(confirmer.Config{
+		Tx:      tx,
+		Repo:    repo,
+		Mailer:  m,
+		BaseURL: "http://localhost:8080",
+		RED:     redmetrics.New(redmetrics.Config{Subsystem: "confirmer"}),
+	})
 	return c, tx, repo, m
 }
 
@@ -112,7 +119,14 @@ func newConfirmerWithRegistry(t *testing.T) (*confirmer.Confirmer, *txmocks.Mock
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
 	reg := prometheus.NewRegistry()
-	c := confirmer.New(confirmer.Config{Tx: tx, Repo: repo, Mailer: m, BaseURL: "http://localhost:8080", Registry: reg})
+	c := confirmer.New(confirmer.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		BaseURL:  "http://localhost:8080",
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "confirmer", Registry: reg}),
+	})
 	return c, tx, repo, m, reg
 }
 
@@ -138,4 +152,40 @@ func TestConfirmer_Flush_IncrementsEmailSentMetric(t *testing.T) {
 		confirmer_emails_sent_total{result="ok"} 1
 	`)
 	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_emails_sent_total"))
+}
+
+func TestConfirmer_FlushRecordsRED(t *testing.T) {
+	c, tx, repo, m, reg := newConfirmerWithRegistry(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil)
+
+	c.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP confirmer_requests_total Total number of confirmer operations.
+		# TYPE confirmer_requests_total counter
+		confirmer_requests_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_requests_total"))
+}
+
+func TestConfirmer_EmptyFlushEmitsNoREDSample(t *testing.T) {
+	c, tx, repo, _, reg := newConfirmerWithRegistry(t)
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil)
+
+	c.Flush(context.Background())
+
+	// Empty flush must emit no RED sample at all — the metric family is absent.
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(""), "confirmer_requests_total"))
 }

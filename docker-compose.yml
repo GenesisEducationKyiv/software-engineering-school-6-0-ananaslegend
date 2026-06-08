@@ -57,6 +57,7 @@ services:
       REDIS_URL: redis://redis:6379
       LOG_PRETTY: "true"
       LOG_LEVEL: info
+      VECTOR_INGEST_URL: http://vector:8686/ingest
     env_file:
       - path: .env
         required: false

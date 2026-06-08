@@ -7,13 +7,15 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/config"
 	"github.com/ananaslegend/reposeetory/internal/notifier/emailer"
+	"github.com/ananaslegend/reposeetory/internal/observability/emailermetrics"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 )
 
-func newEmailer(cfg config.Config, log zerolog.Logger) (emailer.Emailer, error) {
+func newEmailer(cfg config.Config, log zerolog.Logger, red *redmetrics.RED) (emailer.Emailer, error) {
 	switch {
 	case cfg.ResendAPIKey != "":
 		log.Info().Msg("mailer: resend")
-		return emailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFrom), nil
+		return emailermetrics.Wrap(emailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFrom), "resend", red), nil
 
 	case cfg.SMTPHost != "":
 		mailer, err := emailer.NewSMTPMailer(emailer.SMTPMailerConfig{
@@ -28,10 +30,10 @@ func newEmailer(cfg config.Config, log zerolog.Logger) (emailer.Emailer, error) 
 			return nil, fmt.Errorf("app.newEmailer: emailer.NewSMTPMailer: %w", err)
 		}
 		log.Info().Msg("mailer: smtp")
-		return mailer, nil
+		return emailermetrics.Wrap(mailer, "smtp", red), nil
 
 	default:
 		log.Info().Msg("mailer: stub")
-		return emailer.NewStubMailer(), nil
+		return emailermetrics.Wrap(emailer.NewStubMailer(), "stub", red), nil
 	}
 }

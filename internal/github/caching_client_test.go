@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -136,6 +137,40 @@ github_cache_hits_total 1
 # TYPE github_cache_misses_total counter
 github_cache_misses_total 1
 `), "github_cache_hits_total", "github_cache_misses_total"))
+}
+
+func TestCaching_GetLatestReleases_RecordsRED_Cached(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	reg := prometheus.NewRegistry()
+	red := redmetrics.New(redmetrics.Config{Subsystem: "github_client", Registry: reg})
+	stub := &stubProvider{result: map[int64]string{1: "v1.0.0"}}
+	c := NewCachingClient(CachingConfig{
+		Provider: stub,
+		RDB:      rdb,
+		TTL:      time.Minute,
+		Registry: reg,
+		RED:      red,
+	})
+
+	repos := []domain.GitHubRepo{{ID: 1, Owner: "o", Name: "n"}}
+
+	// First call — populates cache (result=ok).
+	_, err := c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+
+	// Second call — all cached, wrapped provider must NOT be called (result=cached).
+	_, err = c.GetLatestReleases(context.Background(), GetLatestReleasesParams{Repos: repos})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, stub.calls, "wrapped provider must not be called on full cache hit")
+
+	const expected = `
+# HELP github_client_requests_total Total number of github_client operations.
+# TYPE github_client_requests_total counter
+github_client_requests_total{result="cached"} 1
+github_client_requests_total{result="ok"} 1
+`
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "github_client_requests_total"))
 }
 
 func TestCachingReleaseProvider_RedisError_Fallback(t *testing.T) {

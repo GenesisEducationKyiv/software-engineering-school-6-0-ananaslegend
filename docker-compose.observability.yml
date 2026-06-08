@@ -1,0 +1,86 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+
+  vector:
+    image: timberio/vector:0.38.0-alpine
+    command: ["--config", "/etc/vector/vector.toml"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./infra/vector/vector.toml:/etc/vector/vector.toml:ro
+    environment:
+      ES_URL: http://elasticsearch:9200
+      ES_USER: elastic
+      ES_PASSWORD: changeme
+    ports:
+      - "8686:8686"
+
+  vmsingle:
+    image: victoriametrics/victoria-metrics:v1.99.0
+    command:
+      - "-storageDataPath=/storage"
+      - "-retentionPeriod=30d"
+      - "-httpListenAddr=:8428"
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/storage
+
+  vmagent:
+    image: victoriametrics/vmagent:v1.99.0
+    depends_on:
+      - api
+      - vmsingle
+    command:
+      - "-promscrape.config=/etc/vmagent/vmagent.yml"
+      - "-remoteWrite.url=http://vmsingle:8428/api/v1/write"
+      - "-remoteWrite.tmpDataPath=/tmp/vmagent"
+    volumes:
+      - ./infra/vmagent/vmagent.yml:/etc/vmagent/vmagent.yml:ro
+    environment:
+      APP_METRICS_TARGET: api:8080
+      ENV: development
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    depends_on:
+      - vmsingle
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  es-data:
+  vm-data:
+  grafana-data:

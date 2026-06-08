@@ -16,6 +16,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/notifier"
 	"github.com/ananaslegend/reposeetory/internal/notifier/mocks"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
@@ -25,7 +26,12 @@ func newNotifier(t *testing.T) (*notifier.Notifier, *txmocks.MockTransactor, *mo
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
-	n := notifier.New(notifier.Config{Tx: tx, Repo: repo, Mailer: m})
+	n := notifier.New(notifier.Config{
+		Tx:     tx,
+		Repo:   repo,
+		Mailer: m,
+		RED:    redmetrics.New(redmetrics.Config{Subsystem: "notifier"}),
+	})
 	return n, tx, repo, m
 }
 
@@ -115,7 +121,13 @@ func newNotifierWithRegistry(t *testing.T) (*notifier.Notifier, *txmocks.MockTra
 	repo := mocks.NewMockRepository(ctrl)
 	m := mocks.NewMockMailSender(ctrl)
 	reg := prometheus.NewRegistry()
-	n := notifier.New(notifier.Config{Tx: tx, Repo: repo, Mailer: m, Registry: reg})
+	n := notifier.New(notifier.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "notifier", Registry: reg}),
+	})
 	return n, tx, repo, m, reg
 }
 
@@ -141,4 +153,40 @@ func TestNotifier_Flush_IncrementsEmailSentMetric(t *testing.T) {
 		notifier_emails_sent_total{result="ok"} 1
 	`)
 	require.NoError(t, testutil.GatherAndCompare(reg, expected, "notifier_emails_sent_total"))
+}
+
+func TestNotifier_FlushRecordsRED(t *testing.T) {
+	n, tx, repo, m, reg := newNotifierWithRegistry(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return([]notifier.PendingNotification{testPending}, nil),
+		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendRelease(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil)
+
+	n.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP notifier_requests_total Total number of notifier operations.
+		# TYPE notifier_requests_total counter
+		notifier_requests_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "notifier_requests_total"))
+}
+
+func TestNotifier_EmptyFlushEmitsNoREDSample(t *testing.T) {
+	n, tx, repo, _, reg := newNotifierWithRegistry(t)
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil)
+
+	n.Flush(context.Background())
+
+	// Empty flush must emit no RED sample at all — the metric family is absent.
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(""), "notifier_requests_total"))
 }

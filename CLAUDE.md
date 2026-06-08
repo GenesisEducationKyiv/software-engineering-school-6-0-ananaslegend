@@ -32,6 +32,10 @@ GitHub Release Notification API. Користувач підписується �
 
 - **Resend як email-провайдер** — `internal/notifier/emailer/resend.go` поверх `resend-go/v2`. SMTP-мейлер залишений для локальної розробки через mailpit. → [ADR-0013](docs/adr/0013-resend-email-provider.md)
 
+- **Observability stack** — Vector → ES + vmagent → VictoriaMetrics + Grafana; structured logs and RED metrics with one dashboard. → [ADR-0017](docs/adr/0017-observability-stack.md)
+
+- **RED metric conventions** — `<subsystem>_requests_total` + `<subsystem>_request_duration_seconds`, mandatory `result` label, bounded extras; HTTP layer keeps `status`-label form for baseline compatibility. → [ADR-0018](docs/adr/0018-red-metrics-conventions.md)
+
 Брендова система (палітра dark hero, wordmark, Noto Emoji inline) — див. [`docs/brand-design-system.md`](docs/brand-design-system.md).
 
 ## Конвенції поза ADR
@@ -83,6 +87,7 @@ make generate        # go generate ./... (мoki, swagger)
 make swagger         # перегенерувати docs/ зі swaggo
 make migrate-up / migrate-down
 make docker-up / docker-down / docker-clean
+make obs-up / obs-down / obs-init  # observability stack (ES + Kibana + Vector + VM + Grafana)
 ```
 
 ## Конфігурація
