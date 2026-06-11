@@ -1,4 +1,4 @@
-package emailer
+package email
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 
 	mail "github.com/wneessen/go-mail"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 )
 
 type SMTPMailerConfig struct {
@@ -57,7 +57,7 @@ func NewSMTPMailer(cfg SMTPMailerConfig) (*SMTPMailer, error) {
 	return &SMTPMailer{client: client, from: from}, nil
 }
 
-func (m *SMTPMailer) SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error {
+func (m *SMTPMailer) SendConfirmation(ctx context.Context, p contract.SendConfirmationRequest) error {
 	msg := mail.NewMsg()
 	if err := msg.From(m.from); err != nil {
 		return fmt.Errorf("set from: %w", err)
@@ -80,7 +80,7 @@ func (m *SMTPMailer) SendConfirmation(ctx context.Context, p domain.SendConfirma
 	return nil
 }
 
-func (m *SMTPMailer) SendRelease(ctx context.Context, p domain.SendReleaseParams) error {
+func (m *SMTPMailer) SendRelease(ctx context.Context, p contract.SendReleaseRequest) error {
 	msg := mail.NewMsg()
 	if err := msg.From(m.from); err != nil {
 		return fmt.Errorf("set from: %w", err)

@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/ananaslegend/reposeetory/internal/notifier/emailer"
+	"github.com/ananaslegend/reposeetory/internal/notifications/client"
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
@@ -25,7 +25,7 @@ func runWorkers(
 	cfg config.Config,
 	txr transactor.Transactor,
 	pool *pgxpool.Pool,
-	mail emailer.Emailer,
+	mail *client.Client,
 	releases scanner.ReleaseProvider,
 	reg *prometheus.Registry,
 ) {

@@ -1,6 +1,6 @@
 # CLAUDE.md — reposeetory
 
-GitHub Release Notification API. Користувач підписується на репозиторій, отримує email-підтвердження, далі — лист на кожен новий тег. Один Go-бінарник: HTTP API + scanner + outbox-дрейнери, Postgres, опціональний Redis-кеш, Resend для email.
+GitHub Release Notification API. Користувач підписується на репозиторій, отримує email-підтвердження, далі — лист на кожен новий тег. Два Go-бінарники: монолiт `cmd/api` (HTTP API + scanner + outbox-дрейнери, Postgres, опціональний Redis-кеш) і stateless сервіс нотифікацій `cmd/notifications-svc` (Resend/SMTP + шаблони; email — поточний канал доставки) за HTTP-контрактом.
 
 Архітектура й мотивація рішень зафіксовані в [`docs/adr/`](docs/adr/README.md) і [`docs/architecture.md`](docs/architecture.md); візуальна айдентика — у [`docs/brand-design-system.md`](docs/brand-design-system.md). Тут — стисла навігація.
 
@@ -30,7 +30,7 @@ GitHub Release Notification API. Користувач підписується �
 
 - **Хостинг на Railway** — git-deploy через `Dockerfile`, Postgres/Redis як managed plugins, `DATABASE_URL` інжектується платформою. Виключає SMTP (порти 25/465/587 заблоковані на мережному рівні). → [ADR-0012](docs/adr/0012-host-on-railway.md)
 
-- **Resend як email-провайдер** — `internal/notifier/emailer/resend.go` поверх `resend-go/v2`. SMTP-мейлер залишений для локальної розробки через mailpit. → [ADR-0013](docs/adr/0013-resend-email-provider.md)
+- **Resend як email-провайдер** — `internal/notifications/email/resend.go` поверх `resend-go/v2`. SMTP-мейлер залишений для локальної розробки через mailpit. → [ADR-0013](docs/adr/0013-resend-email-provider.md)
 
 Брендова система (палітра dark hero, wordmark, Noto Emoji inline) — див. [`docs/brand-design-system.md`](docs/brand-design-system.md).
 
@@ -61,18 +61,14 @@ subhttp "github.com/ananaslegend/reposeetory/internal/subscription/http"
 
 Без аліаса збірка ламається з повідомленнями, які не вказують на причину.
 
-### `fullMailer` — composite interface у composition root
-Коли кілька feature-модулів ділять одну реалізацію залежності, композитний інтерфейс живе у `main.go`, а не в одному з feature-пакетів:
+### Одна реалізація на кілька consumer-side інтерфейсів
+Коли кілька feature-модулів ділять одну залежність, її конкретна реалізація задовольняє consumer-side інтерфейс кожного з них напряму — без штучного "shared"-пакета чи композитного інтерфейсу. Приклад: `*client.Client` (`internal/notifications/client`) реалізує і `notifier.NotificationsSender`, і `confirmer.NotificationsSender`, і передається в обидва дрейнери у `internal/app/workers.go` ([ADR-0002](docs/adr/0002-consumer-side-interfaces.md)).
 
-```go
-// cmd/api/main.go
-type fullMailer interface {
-    notifier.MailSender
-    confirmer.MailSender
-}
-```
-
-Це уникнення штучного "shared"-пакету і дотримання правила consumer-side інтерфейсів ([ADR-0002](docs/adr/0002-consumer-side-interfaces.md)).
+### Сервіс нотифікацій (`cmd/notifications-svc`)
+Доставка нотифікацій винесена в окремий stateless HTTP-сервіс. Межі:
+- **Монолiт** володіє outbox-таблицями і дрейнерами (`notifier`/`confirmer`), будує URL-и з `APP_BASE_URL` і шле запити через клієнтську бібліотеку `internal/notifications/client`.
+- **Сервіс** (`cmd/notifications-svc`, пакети `internal/notifications/{contract,transport,email}`) володіє провайдерами (Resend/SMTP) і шаблонами; email — поточний канал (`internal/notifications/email`, інтерфейс `Sender`). Endpoint-и: `POST /v1/notifications/release`, `/v1/notifications/confirmation`.
+- **Контракт + клієнт**: спільні DTO + `ErrPermanent` у `internal/notifications/contract`; клієнтська бібліотека для консюмерів — `internal/notifications/client`. Семантика доставки: `2xx`→`sent_at`; `4xx`→permanent (дроп poison-рядка); `5xx`/timeout→transient (ретрай через outbox).
 
 ## Команди
 
@@ -87,4 +83,8 @@ make docker-up / docker-down / docker-clean
 
 ## Конфігурація
 
-Скопіювати `.env.example` → `.env`. Ключові змінні: `DATABASE_URL`, `APP_BASE_URL`, `GITHUB_TOKEN` (обов'язковий для сканера — без нього `WARN` і scanner не стартує), `REDIS_URL` (опціональний кеш), `RESEND_API_KEY` або `SMTP_HOST` + `SMTP_*`.
+Скопіювати `.env.example` → `.env`.
+
+**Монолiт (`cmd/api`):** `DATABASE_URL`, `APP_BASE_URL`, `NOTIFICATIONS_URL` (адреса сервісу нотифікацій), `GITHUB_TOKEN` (обов'язковий для сканера — без нього `WARN` і scanner не стартує), `REDIS_URL` (опціональний кеш).
+
+**Сервіс нотифікацій (`cmd/notifications-svc`):** `NOTIFICATIONS_HTTP_ADDR`, `RESEND_API_KEY` або `SMTP_HOST` + `SMTP_*` (Resend → SMTP → Stub). Ці змінні споживає лише сервіс, не монолiт.

@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 
 	confirmer "github.com/ananaslegend/reposeetory/internal/confirmer"
-	domain "github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	contract "github.com/ananaslegend/reposeetory/internal/notifications/contract"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -71,32 +71,32 @@ func (mr *MockRepositoryMockRecorder) MarkSent(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkSent", reflect.TypeOf((*MockRepository)(nil).MarkSent), ctx, id)
 }
 
-// MockMailSender is a mock of MailSender interface.
-type MockMailSender struct {
+// MockNotificationsSender is a mock of NotificationsSender interface.
+type MockNotificationsSender struct {
 	ctrl     *gomock.Controller
-	recorder *MockMailSenderMockRecorder
+	recorder *MockNotificationsSenderMockRecorder
 	isgomock struct{}
 }
 
-// MockMailSenderMockRecorder is the mock recorder for MockMailSender.
-type MockMailSenderMockRecorder struct {
-	mock *MockMailSender
+// MockNotificationsSenderMockRecorder is the mock recorder for MockNotificationsSender.
+type MockNotificationsSenderMockRecorder struct {
+	mock *MockNotificationsSender
 }
 
-// NewMockMailSender creates a new mock instance.
-func NewMockMailSender(ctrl *gomock.Controller) *MockMailSender {
-	mock := &MockMailSender{ctrl: ctrl}
-	mock.recorder = &MockMailSenderMockRecorder{mock}
+// NewMockNotificationsSender creates a new mock instance.
+func NewMockNotificationsSender(ctrl *gomock.Controller) *MockNotificationsSender {
+	mock := &MockNotificationsSender{ctrl: ctrl}
+	mock.recorder = &MockNotificationsSenderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockMailSender) EXPECT() *MockMailSenderMockRecorder {
+func (m *MockNotificationsSender) EXPECT() *MockNotificationsSenderMockRecorder {
 	return m.recorder
 }
 
 // SendConfirmation mocks base method.
-func (m *MockMailSender) SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error {
+func (m *MockNotificationsSender) SendConfirmation(ctx context.Context, p contract.SendConfirmationRequest) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendConfirmation", ctx, p)
 	ret0, _ := ret[0].(error)
@@ -104,7 +104,7 @@ func (m *MockMailSender) SendConfirmation(ctx context.Context, p domain.SendConf
 }
 
 // SendConfirmation indicates an expected call of SendConfirmation.
-func (mr *MockMailSenderMockRecorder) SendConfirmation(ctx, p any) *gomock.Call {
+func (mr *MockNotificationsSenderMockRecorder) SendConfirmation(ctx, p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendConfirmation", reflect.TypeOf((*MockMailSender)(nil).SendConfirmation), ctx, p)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendConfirmation", reflect.TypeOf((*MockNotificationsSender)(nil).SendConfirmation), ctx, p)
 }

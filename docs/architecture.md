@@ -12,7 +12,8 @@ to the relevant [ADR](./adr/README.md).
 ```mermaid
 flowchart LR
     U([Subscriber<br/>web browser])
-    R[reposeetory<br/>Go service]
+    R[cmd/api<br/>monolith]
+    M[cmd/notifications-svc<br/>notifications service]
     GH[(GitHub<br/>GraphQL API)]
     RS[(Resend<br/>HTTPS email API)]
     PG[(Postgres)]
@@ -20,7 +21,8 @@ flowchart LR
 
     U <-->|HTTP / HTML + JSON| R
     R -->|polls latest releases<br/>per SCANNER_INTERVAL| GH
-    R -->|confirmation +<br/>release emails| RS
+    R -->|confirmation +<br/>release emails<br/>HTTP POST /v1/notifications/*| M
+    M -->|deliver| RS
     R <-->|reads / writes| PG
     R <-->|cache reads / writes| RD
 ```
@@ -33,12 +35,14 @@ time a new release tag appears on that repo.
 
 ## 2. Components
 
-Single binary; one process. Internal packages are organised as
-feature folders (see [ADR-0001](./adr/0001-screaming-architecture.md)).
+Two binaries: the monolith `cmd/api` and the standalone
+`cmd/notifications-svc` notifications service (email is the current
+delivery channel). Internal packages are organised as feature folders
+(see [ADR-0001](./adr/0001-screaming-architecture.md)).
 
 ```mermaid
 flowchart TB
-    subgraph Bin [reposeetory binary]
+    subgraph Api [cmd/api binary]
         APP[app<br/>composition root]
         HTTPAPI[httpapi<br/>router + middleware]
 
@@ -52,9 +56,16 @@ flowchart TB
         subgraph Shared
             GHC[github<br/>client + Redis cache]
             TXR[transactor]
-            MAIL[mailer]
+            MC[notifications/client<br/>HTTP client]
         end
     end
+
+    subgraph Notif [cmd/notifications-svc binary]
+        MTR[transport<br/>HTTP handlers]
+        MEM[email<br/>Resend / SMTP / Stub + templates]
+    end
+
+    RS[(Resend / SMTP)]
 
     APP --> HTTPAPI
     APP --> SUB
@@ -69,21 +80,25 @@ flowchart TB
     CONF --> TXR
 
     SCAN --> GHC
-    NOTIF --> MAIL
-    CONF --> MAIL
+    NOTIF --> MC
+    CONF --> MC
+    MC -->|HTTP POST /v1/notifications/*| MTR
+    MTR --> MEM
+    MEM --> RS
 ```
 
-| Component         | Responsibility                                                             | Key ADRs |
-|-------------------|----------------------------------------------------------------------------|----------|
-| `subscription/`   | HTTP API, business rules, persistence for subscriptions and repositories. | 0001, 0002, 0010 |
-| `scanner/`        | Periodic GitHub poll, batch detection of new release tags.                | 0008 |
-| `notifier/`       | Drains `release_notifications` outbox via the configured mailer.           | 0003 |
-| `confirmer/`      | Drains `confirmation_notifications` outbox via the configured mailer.      | 0003 |
-| `github/`         | GraphQL client + Redis caching decorator (`CachingReleaseProvider`).       | 0008 |
-| `transactor/`     | Transaction boundaries via `context.Context`.                              | 0004 |
-| `mailer/`         | Resend in production, `StubMailer` (stdout) locally — one interface, gated by env config. | — |
-| `httpapi/`        | Cross-cutting HTTP: chi router, middleware, error mapping, metrics.        | 0005, 0006 |
-| `app/`            | Composition root: wires everything based on env config.                   | 0001 |
+| Component           | Responsibility                                                             | Key ADRs |
+|---------------------|----------------------------------------------------------------------------|----------|
+| `subscription/`     | HTTP API, business rules, persistence for subscriptions and repositories. | 0001, 0002, 0010 |
+| `scanner/`          | Periodic GitHub poll, batch detection of new release tags.                | 0008 |
+| `notifier/`         | Drains `release_notifications` outbox; sends via `notifications/client` over HTTP. | 0003 |
+| `confirmer/`        | Drains `confirmation_notifications` outbox; sends via `notifications/client` over HTTP. | 0003 |
+| `github/`           | GraphQL client + Redis caching decorator (`CachingReleaseProvider`).       | 0008 |
+| `transactor/`       | Transaction boundaries via `context.Context`.                              | 0004 |
+| `notifications/client/` | Monolith-side HTTP client to the notifications service; satisfies the drainers' `NotificationsSender`. | — |
+| `cmd/notifications-svc`        | Standalone, stateless notifications service: Resend/SMTP + templates, `POST /v1/notifications/*`. | 0013 |
+| `httpapi/`          | Cross-cutting HTTP: chi router, middleware, error mapping, metrics.        | 0005, 0006 |
+| `app/`              | Composition root: wires everything based on env config.                   | 0001 |
 
 ---
 
@@ -207,6 +222,7 @@ sequenceDiagram
     participant DB as Postgres
     participant GH as GitHub<br/>(via CachingProvider)
     participant N as Notifier
+    participant M as notifications service
     participant RS as Resend
 
     loop every SCANNER_INTERVAL
@@ -224,7 +240,9 @@ sequenceDiagram
     loop every NOTIFIER_INTERVAL
         N->>DB: BEGIN
         N->>DB: SELECT release_notifications<br/>FOR UPDATE SKIP LOCKED LIMIT 1
-        N->>RS: POST /emails (release notification)
+        N->>M: POST /v1/notifications/release (HTTP)
+        M->>RS: POST /emails (release notification)
+        Note over N,M: 2xx → mark sent · 4xx → drop · 5xx/timeout → retry next tick
         N->>DB: UPDATE sent_at = now()
         N->>DB: COMMIT
     end
@@ -253,19 +271,19 @@ sequenceDiagram
 
 | Dependency        | Required | Purpose                                          | Fallback if absent |
 |-------------------|----------|--------------------------------------------------|--------------------|
-| Postgres          | yes      | Source of truth for subscriptions + outboxes.    | service refuses to start |
+| Postgres          | yes      | Source of truth for subscriptions + outboxes (monolith). | monolith refuses to start |
 | GitHub GraphQL    | yes      | Latest release per repo, batched.                | scanner skips startup with WARN |
-| Resend (HTTPS)    | no       | Outbound transactional email.                    | `StubMailer` (logs to stdout) |
+| Notifications service (HTTP) | yes  | Email rendering + delivery for the monolith.     | drainers retry via outbox until it is reachable |
+| Resend (HTTPS)    | no       | Outbound transactional email (used by the notifications service). | `StubMailer` (logs to stdout) |
 | Redis             | no       | 10-min cache of GitHub releases.                 | `CachingReleaseProvider` is not wired in |
 
-The mailer is the clearest example of the swap-friendly design:
+The notifications service is the clearest example of the swap-friendly design:
 adding or replacing a provider is a new file under
-`internal/notifier/emailer/` plus one `case` in
-`internal/app/mailer.go` — `notifier/`, `confirmer/`, and the
-business logic stay untouched.
+`internal/notifications/email/` plus one `case` in `cmd/notifications-svc/main.go` —
+`notifier/`, `confirmer/`, and the business logic stay untouched.
 
 External integrations are hidden behind small interfaces inside
-`internal/github/` and `internal/notifier/emailer/`. See
+`internal/github/` and `internal/notifications/email/`. See
 [ADR-0008](./adr/0008-github-graphql-batch-fetch.md) for GraphQL
 rationale, [ADR-0002](./adr/0002-consumer-side-interfaces.md) for the
 interface-placement convention.

@@ -1,11 +1,11 @@
-package emailer
+package email
 
 import (
 	"context"
 
 	"github.com/rs/zerolog"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 )
 
 type StubMailer struct{}
@@ -14,7 +14,7 @@ func NewStubMailer() *StubMailer {
 	return &StubMailer{}
 }
 
-func (s *StubMailer) SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error {
+func (s *StubMailer) SendConfirmation(ctx context.Context, p contract.SendConfirmationRequest) error {
 	zerolog.Ctx(ctx).Info().
 		Str("to", p.To).
 		Str("confirm_url", p.ConfirmURL).
@@ -22,7 +22,7 @@ func (s *StubMailer) SendConfirmation(ctx context.Context, p domain.SendConfirma
 	return nil
 }
 
-func (s *StubMailer) SendRelease(ctx context.Context, p domain.SendReleaseParams) error {
+func (s *StubMailer) SendRelease(ctx context.Context, p contract.SendReleaseRequest) error {
 	zerolog.Ctx(ctx).Info().
 		Str("to", p.To).
 		Str("repo", p.RepoFullName).

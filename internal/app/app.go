@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/config"
+	"github.com/ananaslegend/reposeetory/internal/notifications/client"
 )
 
 // Run wires up all application components and blocks until ctx is cancelled.
@@ -45,15 +47,12 @@ func Run(ctx context.Context) {
 
 	metricRegistry := newMetricsRegistry(pool)
 
-	mailSender, err := newEmailer(cfg, log)
-	if err != nil {
-		log.Fatal().Err(err).Msg("create mailer")
-	}
+	notificationsClient := client.New(cfg.NotificationsURL, &http.Client{Timeout: 10 * time.Second})
 
 	releaseProvider := newReleaseProvider(cfg, log, metricRegistry, rdb)
 
 	var cronsWG sync.WaitGroup
-	runWorkers(ctx, &cronsWG, cfg, txr, pool, mailSender, releaseProvider, metricRegistry)
+	runWorkers(ctx, &cronsWG, cfg, txr, pool, notificationsClient, releaseProvider, metricRegistry)
 
 	srv := newHTTPServer(cfg, pool, log, metricRegistry)
 

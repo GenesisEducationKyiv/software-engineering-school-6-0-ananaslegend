@@ -12,7 +12,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 )
 
 // PendingNotification is one outbox row joined with subscription + repository data.
@@ -31,16 +31,16 @@ type Repository interface {
 	MarkSent(ctx context.Context, id int64) error
 }
 
-// MailSender sends release notification emails.
-type MailSender interface {
-	SendRelease(ctx context.Context, p domain.SendReleaseParams) error
+// NotificationsSender sends release notifications.
+type NotificationsSender interface {
+	SendRelease(ctx context.Context, p contract.SendReleaseRequest) error
 }
 
 // Config holds Notifier dependencies.
 type Config struct {
 	Tx       transactor.Transactor
 	Repo     Repository
-	Mailer   MailSender
+	Mailer   NotificationsSender
 	Interval time.Duration
 	BaseURL  string
 	Registry *prometheus.Registry
@@ -50,7 +50,7 @@ type Config struct {
 type Notifier struct {
 	tx       transactor.Transactor
 	repo     Repository
-	mailer   MailSender
+	mailer   NotificationsSender
 	interval time.Duration
 	baseURL  string
 	m        notifierMetrics
@@ -100,7 +100,7 @@ func (n *Notifier) Flush(ctx context.Context) {
 				return nil
 			}
 			p := items[0]
-			sendErr := n.mailer.SendRelease(ctx, domain.SendReleaseParams{
+			sendErr := n.mailer.SendRelease(ctx, contract.SendReleaseRequest{
 				To:           p.Email,
 				RepoFullName: p.RepoOwner + "/" + p.RepoName,
 				ReleaseTag:   p.ReleaseTag,
@@ -110,7 +110,7 @@ func (n *Notifier) Flush(ctx context.Context) {
 			})
 			if sendErr != nil {
 				n.m.emailsSent.WithLabelValues("error").Inc()
-				return fmt.Errorf("notifier.Notifier.Flush: MailSender.SendRelease: %w", sendErr)
+				return fmt.Errorf("notifier.Notifier.Flush: NotificationsSender.SendRelease: %w", sendErr)
 			}
 			n.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = n.repo.MarkSent(ctx, p.ID); err != nil {

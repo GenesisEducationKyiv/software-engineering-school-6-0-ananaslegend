@@ -4,13 +4,19 @@ DB_URL               ?= postgres://postgres:pass@localhost:5432/postgres?sslmode
 GOLANGCI_LINT_VERSION = latest
 SWAG_VERSION          = v1.16.6
 
-.PHONY: build run test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install
+.PHONY: build build-notifications-svc run run-notifications-svc test vet generate tidy mod-update mod-update-patch lint lint-install lint-fix fix fix-diff migrate-up migrate-down clean swagger swagger-install
 
 build:
 	go build -o $(BINARY) ./cmd/api
 
+build-notifications-svc:
+	go build -o bin/notifications-svc ./cmd/notifications-svc
+
 run:
 	go run ./cmd/api
+
+run-notifications-svc:
+	go run ./cmd/notifications-svc
 
 test:
 	go test ./...

@@ -1,4 +1,4 @@
-package emailer
+package email
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/resend/resend-go/v2"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 )
 
 type ResendMailer struct {
@@ -22,7 +22,7 @@ func NewResendMailer(apiKey, from string) *ResendMailer {
 	}
 }
 
-func (m *ResendMailer) SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error {
+func (m *ResendMailer) SendConfirmation(ctx context.Context, p contract.SendConfirmationRequest) error {
 	var htmlBuf, txtBuf bytes.Buffer
 	if err := confirmationHTMLTmpl.Execute(&htmlBuf, p); err != nil {
 		return fmt.Errorf("render confirmation html: %w", err)
@@ -44,7 +44,7 @@ func (m *ResendMailer) SendConfirmation(ctx context.Context, p domain.SendConfir
 	return nil
 }
 
-func (m *ResendMailer) SendRelease(ctx context.Context, p domain.SendReleaseParams) error {
+func (m *ResendMailer) SendRelease(ctx context.Context, p contract.SendReleaseRequest) error {
 	var htmlBuf, txtBuf bytes.Buffer
 	if err := releaseHTMLTmpl.Execute(&htmlBuf, p); err != nil {
 		return fmt.Errorf("render release html: %w", err)
