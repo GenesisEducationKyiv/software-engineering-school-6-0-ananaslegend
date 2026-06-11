@@ -30,6 +30,24 @@ services:
     ports:
       - "8025:8025"
 
+  notifications-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.notifications-svc
+    ports:
+      - "8081:8081"
+    environment:
+      NOTIFICATIONS_HTTP_ADDR: ":8081"
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_TLS_POLICY: none
+      SMTP_FROM: noreply@reposeetory.local
+      LOG_PRETTY: "true"
+      LOG_LEVEL: info
+    depends_on:
+      mailpit:
+        condition: service_started
+
   migrate:
     image: migrate/migrate:latest
     volumes:
@@ -50,10 +68,7 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:pass@postgres:5432/postgres?sslmode=disable
       APP_BASE_URL: http://localhost:8080
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_TLS_POLICY: none
-      SMTP_FROM: noreply@reposeetory.local
+      NOTIFICATIONS_URL: http://notifications-svc:8081
       REDIS_URL: redis://redis:6379
       LOG_PRETTY: "true"
       LOG_LEVEL: info
@@ -63,7 +78,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      mailpit:
+      notifications-svc:
         condition: service_started
       redis:
         condition: service_healthy

@@ -22,6 +22,8 @@ type Config struct {
 	AppBaseURL      string        `envconfig:"APP_BASE_URL" default:"http://localhost:8080"`
 	ConfirmTokenTTL time.Duration `envconfig:"CONFIRM_TOKEN_TTL" default:"24h"`
 
+	NotificationsURL string `envconfig:"NOTIFICATIONS_URL" default:"http://localhost:8081"`
+
 	LogLevel  string `envconfig:"LOG_LEVEL" default:"info"`
 	LogPretty bool   `envconfig:"LOG_PRETTY" default:"true"`
 

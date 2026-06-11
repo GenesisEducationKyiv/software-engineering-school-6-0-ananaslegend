@@ -12,7 +12,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 )
 
 // PendingConfirmation is one outbox row joined with subscription + repository data.
@@ -30,16 +30,16 @@ type Repository interface {
 	MarkSent(ctx context.Context, id int64) error
 }
 
-// MailSender sends confirmation emails.
-type MailSender interface {
-	SendConfirmation(ctx context.Context, p domain.SendConfirmationParams) error
+// NotificationsSender sends confirmation notifications.
+type NotificationsSender interface {
+	SendConfirmation(ctx context.Context, p contract.SendConfirmationRequest) error
 }
 
 // Config holds Confirmer dependencies.
 type Config struct {
 	Tx       transactor.Transactor
 	Repo     Repository
-	Mailer   MailSender
+	Mailer   NotificationsSender
 	Interval time.Duration
 	BaseURL  string
 	Registry *prometheus.Registry
@@ -49,7 +49,7 @@ type Config struct {
 type Confirmer struct {
 	tx       transactor.Transactor
 	repo     Repository
-	mailer   MailSender
+	mailer   NotificationsSender
 	interval time.Duration
 	baseURL  string
 	m        confirmerMetrics
@@ -96,14 +96,14 @@ func (c *Confirmer) Flush(ctx context.Context) {
 				return nil
 			}
 			p := items[0]
-			err = c.mailer.SendConfirmation(ctx, domain.SendConfirmationParams{
+			sendErr := c.mailer.SendConfirmation(ctx, contract.SendConfirmationRequest{
 				To:           p.Email,
 				ConfirmURL:   c.baseURL + "/api/confirm/" + p.ConfirmToken,
 				RepoFullName: p.RepoOwner + "/" + p.RepoName,
 			})
-			if err != nil {
+			if sendErr != nil {
 				c.m.emailsSent.WithLabelValues("error").Inc()
-				return fmt.Errorf("confirmer.Confirmer.Flush: MailSender.SendConfirmation: %w", err)
+				return fmt.Errorf("confirmer.Confirmer.Flush: NotificationsSender.SendConfirmation: %w", sendErr)
 			}
 			c.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = c.repo.MarkSent(ctx, p.ID); err != nil {

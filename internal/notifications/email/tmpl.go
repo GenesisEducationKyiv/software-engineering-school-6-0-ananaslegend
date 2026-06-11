@@ -1,4 +1,4 @@
-package emailer
+package email
 
 import (
 	"embed"

@@ -16,15 +16,15 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/confirmer"
 	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 )
 
-func newConfirmer(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockMailSender) {
+func newConfirmer(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockNotificationsSender) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
+	m := mocks.NewMockNotificationsSender(ctrl)
 	c := confirmer.New(confirmer.Config{Tx: tx, Repo: repo, Mailer: m, BaseURL: "http://localhost:8080"})
 	return c, tx, repo, m
 }
@@ -62,7 +62,7 @@ func TestConfirmer_FlushOne_MailerCalled(t *testing.T) {
 		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
 		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
 	)
-	m.EXPECT().SendConfirmation(gomock.Any(), domain.SendConfirmationParams{
+	m.EXPECT().SendConfirmation(gomock.Any(), contract.SendConfirmationRequest{
 		To:           "user@example.com",
 		ConfirmURL:   "http://localhost:8080/api/confirm/tok-abc123",
 		RepoFullName: "golang/go",
@@ -105,12 +105,12 @@ func TestConfirmer_FlushMultiple_ProcessedInOrder(t *testing.T) {
 	c.Flush(context.Background())
 }
 
-func newConfirmerWithRegistry(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockMailSender, *prometheus.Registry) {
+func newConfirmerWithRegistry(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockNotificationsSender, *prometheus.Registry) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
+	m := mocks.NewMockNotificationsSender(ctrl)
 	reg := prometheus.NewRegistry()
 	c := confirmer.New(confirmer.Config{Tx: tx, Repo: repo, Mailer: m, BaseURL: "http://localhost:8080", Registry: reg})
 	return c, tx, repo, m, reg

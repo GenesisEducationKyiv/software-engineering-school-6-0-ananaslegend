@@ -3,6 +3,7 @@ package notifier_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -14,17 +15,17 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 	"github.com/ananaslegend/reposeetory/internal/notifier"
 	"github.com/ananaslegend/reposeetory/internal/notifier/mocks"
-	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
 )
 
-func newNotifier(t *testing.T) (*notifier.Notifier, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockMailSender) {
+func newNotifier(t *testing.T) (*notifier.Notifier, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockNotificationsSender) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
+	m := mocks.NewMockNotificationsSender(ctrl)
 	n := notifier.New(notifier.Config{Tx: tx, Repo: repo, Mailer: m})
 	return n, tx, repo, m
 }
@@ -63,7 +64,7 @@ func TestNotifier_FlushOneNotification_MailerCalled(t *testing.T) {
 		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return([]notifier.PendingNotification{testPending}, nil),
 		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil),
 	)
-	m.EXPECT().SendRelease(gomock.Any(), domain.SendReleaseParams{
+	m.EXPECT().SendRelease(gomock.Any(), contract.SendReleaseRequest{
 		To:             "user@example.com",
 		RepoFullName:   "golang/go",
 		ReleaseTag:     "go1.22.0",
@@ -83,6 +84,24 @@ func TestNotifier_FlushMailerError_NoMarkSentAndStops(t *testing.T) {
 	repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return([]notifier.PendingNotification{testPending}, nil)
 	m.EXPECT().SendRelease(gomock.Any(), gomock.Any()).Return(smtpErr)
 	// MarkSent must NOT be called on mailer error
+
+	n.Flush(context.Background())
+}
+
+func TestNotifier_FlushPermanentError_DropsAndMarksSent(t *testing.T) {
+	n, tx, repo, m := newNotifier(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return([]notifier.PendingNotification{testPending}, nil),
+		repo.EXPECT().GetNotificationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendRelease(gomock.Any(), gomock.Any()).
+		Return(fmt.Errorf("bad request: %w", contract.ErrPermanent))
+	repo.EXPECT().MarkSent(gomock.Any(), int64(42)).Return(nil)
 
 	n.Flush(context.Background())
 }
@@ -108,12 +127,12 @@ func TestNotifier_FlushMultipleNotifications_ProcessedInOrder(t *testing.T) {
 	n.Flush(context.Background())
 }
 
-func newNotifierWithRegistry(t *testing.T) (*notifier.Notifier, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockMailSender, *prometheus.Registry) {
+func newNotifierWithRegistry(t *testing.T) (*notifier.Notifier, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockNotificationsSender, *prometheus.Registry) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	tx := txmocks.NewMockTransactor(ctrl)
 	repo := mocks.NewMockRepository(ctrl)
-	m := mocks.NewMockMailSender(ctrl)
+	m := mocks.NewMockNotificationsSender(ctrl)
 	reg := prometheus.NewRegistry()
 	n := notifier.New(notifier.Config{Tx: tx, Repo: repo, Mailer: m, Registry: reg})
 	return n, tx, repo, m, reg

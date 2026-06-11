@@ -61,17 +61,3 @@ type MarkConfirmedParams struct {
 	ID  int64
 	Now time.Time
 }
-
-type SendConfirmationParams struct {
-	To           string
-	ConfirmURL   string
-	RepoFullName string
-}
-
-type SendReleaseParams struct {
-	To             string
-	RepoFullName   string
-	ReleaseTag     string
-	ReleaseURL     string
-	UnsubscribeURL string
-}

@@ -13,8 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	contract "github.com/ananaslegend/reposeetory/internal/notifications/contract"
 	notifier "github.com/ananaslegend/reposeetory/internal/notifier"
-	domain "github.com/ananaslegend/reposeetory/internal/subscription/domain"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -71,32 +71,32 @@ func (mr *MockRepositoryMockRecorder) MarkSent(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkSent", reflect.TypeOf((*MockRepository)(nil).MarkSent), ctx, id)
 }
 
-// MockMailSender is a mock of MailSender interface.
-type MockMailSender struct {
+// MockNotificationsSender is a mock of NotificationsSender interface.
+type MockNotificationsSender struct {
 	ctrl     *gomock.Controller
-	recorder *MockMailSenderMockRecorder
+	recorder *MockNotificationsSenderMockRecorder
 	isgomock struct{}
 }
 
-// MockMailSenderMockRecorder is the mock recorder for MockMailSender.
-type MockMailSenderMockRecorder struct {
-	mock *MockMailSender
+// MockNotificationsSenderMockRecorder is the mock recorder for MockNotificationsSender.
+type MockNotificationsSenderMockRecorder struct {
+	mock *MockNotificationsSender
 }
 
-// NewMockMailSender creates a new mock instance.
-func NewMockMailSender(ctrl *gomock.Controller) *MockMailSender {
-	mock := &MockMailSender{ctrl: ctrl}
-	mock.recorder = &MockMailSenderMockRecorder{mock}
+// NewMockNotificationsSender creates a new mock instance.
+func NewMockNotificationsSender(ctrl *gomock.Controller) *MockNotificationsSender {
+	mock := &MockNotificationsSender{ctrl: ctrl}
+	mock.recorder = &MockNotificationsSenderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockMailSender) EXPECT() *MockMailSenderMockRecorder {
+func (m *MockNotificationsSender) EXPECT() *MockNotificationsSenderMockRecorder {
 	return m.recorder
 }
 
 // SendRelease mocks base method.
-func (m *MockMailSender) SendRelease(ctx context.Context, p domain.SendReleaseParams) error {
+func (m *MockNotificationsSender) SendRelease(ctx context.Context, p contract.SendReleaseRequest) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendRelease", ctx, p)
 	ret0, _ := ret[0].(error)
@@ -104,7 +104,7 @@ func (m *MockMailSender) SendRelease(ctx context.Context, p domain.SendReleasePa
 }
 
 // SendRelease indicates an expected call of SendRelease.
-func (mr *MockMailSenderMockRecorder) SendRelease(ctx, p any) *gomock.Call {
+func (mr *MockNotificationsSenderMockRecorder) SendRelease(ctx, p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendRelease", reflect.TypeOf((*MockMailSender)(nil).SendRelease), ctx, p)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendRelease", reflect.TypeOf((*MockNotificationsSender)(nil).SendRelease), ctx, p)
 }
