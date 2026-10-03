@@ -13,3 +13,6 @@ api
 
 # Ad-hoc verification screenshots (kept locally only)
 swagger-verification.png
+
+# E2E test screenshots and Playwright traces
+tests/e2e/_artifacts/

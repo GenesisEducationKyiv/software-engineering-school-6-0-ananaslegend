@@ -30,14 +30,32 @@ type Client struct {
 	restURL    string
 }
 
-// NewClient returns a Client targeting the real GitHub API.
-// token is optional; without it the rate limit is 60 req/h.
-func NewClient(token string) *Client {
+// Config holds optional dependencies for Client. Zero-value fields fall back to
+// the public GitHub API defaults.
+type Config struct {
+	Token      string
+	GraphQLURL string       // optional, default "https://api.github.com/graphql"
+	RESTURL    string       // optional, default "https://api.github.com"
+	HTTPClient *http.Client // optional, default &http.Client{}
+}
+
+// New returns a Client configured by cfg. Empty Config fields use GitHub-public
+// defaults.
+func New(cfg Config) *Client {
+	if cfg.GraphQLURL == "" {
+		cfg.GraphQLURL = "https://api.github.com/graphql"
+	}
+	if cfg.RESTURL == "" {
+		cfg.RESTURL = "https://api.github.com"
+	}
+	if cfg.HTTPClient == nil {
+		cfg.HTTPClient = &http.Client{}
+	}
 	return &Client{
-		token:      token,
-		httpClient: &http.Client{},
-		graphqlURL: "https://api.github.com/graphql",
-		restURL:    "https://api.github.com",
+		token:      cfg.Token,
+		httpClient: cfg.HTTPClient,
+		graphqlURL: cfg.GraphQLURL,
+		restURL:    cfg.RESTURL,
 	}
 }
 

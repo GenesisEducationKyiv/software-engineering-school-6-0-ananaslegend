@@ -1,4 +1,4 @@
-# ADR-0015: Extract email delivery into a standalone mailer service
+# ADR-0019: Extract email delivery into a standalone mailer service
 
 Status: accepted · 2026-06-10 · @ananaslegend · architecture
 
