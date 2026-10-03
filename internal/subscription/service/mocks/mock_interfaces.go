@@ -115,19 +115,57 @@ func (mr *MockRepositoryMockRecorder) MarkConfirmed(ctx, p any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkConfirmed", reflect.TypeOf((*MockRepository)(nil).MarkConfirmed), ctx, p)
 }
 
-// UpsertRepo mocks base method.
-func (m *MockRepository) UpsertRepo(ctx context.Context, p domain.UpsertRepoParams) (int64, error) {
+// SaveRepo mocks base method.
+func (m *MockRepository) SaveRepo(ctx context.Context, p domain.UpsertRepoParams) (int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpsertRepo", ctx, p)
+	ret := m.ctrl.Call(m, "SaveRepo", ctx, p)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// UpsertRepo indicates an expected call of UpsertRepo.
-func (mr *MockRepositoryMockRecorder) UpsertRepo(ctx, p any) *gomock.Call {
+// SaveRepo indicates an expected call of SaveRepo.
+func (mr *MockRepositoryMockRecorder) SaveRepo(ctx, p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertRepo", reflect.TypeOf((*MockRepository)(nil).UpsertRepo), ctx, p)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveRepo", reflect.TypeOf((*MockRepository)(nil).SaveRepo), ctx, p)
+}
+
+// MockConfirmator is a mock of Confirmator interface.
+type MockConfirmator struct {
+	ctrl     *gomock.Controller
+	recorder *MockConfirmatorMockRecorder
+	isgomock struct{}
+}
+
+// MockConfirmatorMockRecorder is the mock recorder for MockConfirmator.
+type MockConfirmatorMockRecorder struct {
+	mock *MockConfirmator
+}
+
+// NewMockConfirmator creates a new mock instance.
+func NewMockConfirmator(ctrl *gomock.Controller) *MockConfirmator {
+	mock := &MockConfirmator{ctrl: ctrl}
+	mock.recorder = &MockConfirmatorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockConfirmator) EXPECT() *MockConfirmatorMockRecorder {
+	return m.recorder
+}
+
+// CreateConfirmation mocks base method.
+func (m *MockConfirmator) CreateConfirmation(ctx context.Context, subscriptionID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateConfirmation", ctx, subscriptionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateConfirmation indicates an expected call of CreateConfirmation.
+func (mr *MockConfirmatorMockRecorder) CreateConfirmation(ctx, subscriptionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConfirmation", reflect.TypeOf((*MockConfirmator)(nil).CreateConfirmation), ctx, subscriptionID)
 }
 
 // MockRemoteRepositoryProvider is a mock of RemoteRepositoryProvider interface.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
+	"github.com/ananaslegend/reposeetory/internal/github"
 	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
 	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 )
@@ -107,13 +108,13 @@ func (n *Notifier) Flush(ctx context.Context) {
 				return nil
 			}
 			p := items[0]
+
 			sendErr := n.mailer.SendRelease(ctx, contract.SendReleaseRequest{
-				To:           p.Email,
-				RepoFullName: p.RepoOwner + "/" + p.RepoName,
-				ReleaseTag:   p.ReleaseTag,
-				ReleaseURL: fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s",
-					p.RepoOwner, p.RepoName, p.ReleaseTag),
-				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, p.UnsubscribeToken),
+				To:             p.Email,
+				RepoFullName:   p.RepoOwner + "/" + p.RepoName,
+				ReleaseTag:     p.ReleaseTag,
+				ReleaseURL:     github.ReleaseURL(p.RepoOwner, p.RepoName, p.ReleaseTag),
+				UnsubscribeURL: UnsubscribeURL(n.baseURL, p.UnsubscribeToken),
 			})
 			switch {
 			case errors.Is(sendErr, contract.ErrPermanent):

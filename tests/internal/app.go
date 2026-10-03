@@ -78,7 +78,9 @@ func NewApp(t testing.TB, cfg AppConfig) *App {
 	repo := subrepo.New(cfg.Pool)
 
 	svc := service.New(service.Config{
+		Tx:              transactor.New(cfg.Pool),
 		Repo:            repo,
+		Confirms:        repo,
 		GitHub:          gh,
 		AppBaseURL:      cfg.AppBaseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,
@@ -168,7 +170,9 @@ func NewE2EApp(t testing.TB, cfg E2EAppConfig) *E2EApp {
 	subRepo := subrepo.New(cfg.Pool)
 
 	svc := service.New(service.Config{
+		Tx:              transactor.New(cfg.Pool),
 		Repo:            subRepo,
+		Confirms:        subRepo,
 		GitHub:          gh,
 		AppBaseURL:      baseURL,
 		ConfirmTokenTTL: cfg.ConfirmTokenTTL,

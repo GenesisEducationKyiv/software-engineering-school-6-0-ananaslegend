@@ -1,7 +1,6 @@
 package email
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -32,45 +31,37 @@ func NewResendMailerWithClient(client *resend.Client, from string) *ResendMailer
 }
 
 func (m *ResendMailer) SendConfirmation(ctx context.Context, p contract.SendConfirmationRequest) error {
-	var htmlBuf, txtBuf bytes.Buffer
-	if err := confirmationHTMLTmpl.Execute(&htmlBuf, p); err != nil {
-		return fmt.Errorf("render confirmation html: %w", err)
-	}
-	if err := confirmationTXTTmpl.Execute(&txtBuf, p); err != nil {
-		return fmt.Errorf("render confirmation txt: %w", err)
-	}
-
-	_, err := m.client.Emails.Send(&resend.SendEmailRequest{
-		From:    m.from,
-		To:      []string{p.To},
-		Subject: fmt.Sprintf("Confirm your subscription to %s", p.RepoFullName),
-		Html:    htmlBuf.String(),
-		Text:    txtBuf.String(),
-	})
+	email, err := renderConfirmation(p)
 	if err != nil {
-		return fmt.Errorf("send confirmation email: %w", err)
+		return fmt.Errorf("email.ResendMailer.SendConfirmation: %w", err)
+	}
+	if err := m.send(ctx, p.To, email); err != nil {
+		return fmt.Errorf("email.ResendMailer.SendConfirmation: %w", err)
 	}
 	return nil
 }
 
 func (m *ResendMailer) SendRelease(ctx context.Context, p contract.SendReleaseRequest) error {
-	var htmlBuf, txtBuf bytes.Buffer
-	if err := releaseHTMLTmpl.Execute(&htmlBuf, p); err != nil {
-		return fmt.Errorf("render release html: %w", err)
+	email, err := renderRelease(p)
+	if err != nil {
+		return fmt.Errorf("email.ResendMailer.SendRelease: %w", err)
 	}
-	if err := releaseTXTTmpl.Execute(&txtBuf, p); err != nil {
-		return fmt.Errorf("render release txt: %w", err)
+	if err := m.send(ctx, p.To, email); err != nil {
+		return fmt.Errorf("email.ResendMailer.SendRelease: %w", err)
 	}
+	return nil
+}
 
-	_, err := m.client.Emails.Send(&resend.SendEmailRequest{
+func (m *ResendMailer) send(ctx context.Context, to string, email renderedEmail) error {
+	_, err := m.client.Emails.SendWithContext(ctx, &resend.SendEmailRequest{
 		From:    m.from,
-		To:      []string{p.To},
-		Subject: fmt.Sprintf("New release %s for %s", p.ReleaseTag, p.RepoFullName),
-		Html:    htmlBuf.String(),
-		Text:    txtBuf.String(),
+		To:      []string{to},
+		Subject: email.Subject,
+		Html:    email.HTML,
+		Text:    email.Text,
 	})
 	if err != nil {
-		return fmt.Errorf("send release email: %w", err)
+		return fmt.Errorf("resend send: %w", err)
 	}
 	return nil
 }

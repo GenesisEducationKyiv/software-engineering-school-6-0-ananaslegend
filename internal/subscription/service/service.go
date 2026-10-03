@@ -5,38 +5,27 @@ package service
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 
 	"github.com/ananaslegend/reposeetory/internal/subscription/domain"
+	"github.com/ananaslegend/reposeetory/pkg/transactor"
 )
-
-var repoNameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
-
-// normalizeRepo extracts "owner/name" from a URL or a plain "owner/name" string.
-// Strips trailing ".git" and takes the last two slash-separated segments.
-func normalizeRepo(s string) string {
-	s = strings.TrimSuffix(s, ".git")
-	s = strings.Trim(s, "/")
-	parts := strings.Split(s, "/")
-	if len(parts) >= 2 {
-		return parts[len(parts)-2] + "/" + parts[len(parts)-1]
-	}
-	return s
-}
 
 // Repository is the storage contract expected by this service.
 type Repository interface {
-	UpsertRepo(ctx context.Context, p domain.UpsertRepoParams) (int64, error)
+	SaveRepo(ctx context.Context, p domain.UpsertRepoParams) (int64, error)
 	CreateSubscription(ctx context.Context, p domain.CreateSubscriptionParams) (*domain.Subscription, error)
-	GetByConfirmToken(ctx context.Context, token string) (*domain.Subscription, error)
 	MarkConfirmed(ctx context.Context, p domain.MarkConfirmedParams) error
+	GetByConfirmToken(ctx context.Context, token string) (*domain.Subscription, error)
 	DeleteByUnsubscribeToken(ctx context.Context, token string) (bool, error)
 	ListByEmail(ctx context.Context, email string) ([]domain.SubscriptionView, error)
+}
+
+type Confirmator interface {
+	CreateConfirmation(ctx context.Context, subscriptionID int64) error
 }
 
 // RemoteRepositoryProvider checks whether a GitHub repository exists.
@@ -46,7 +35,9 @@ type RemoteRepositoryProvider interface {
 
 // Config holds all dependencies and settings for Service.
 type Config struct {
+	Tx              transactor.Transactor
 	Repo            Repository
+	Confirms        Confirmator
 	GitHub          RemoteRepositoryProvider
 	AppBaseURL      string
 	ConfirmTokenTTL time.Duration
@@ -54,70 +45,95 @@ type Config struct {
 }
 
 type Service struct {
-	repo            Repository
-	github          RemoteRepositoryProvider
-	appBaseURL      string
-	confirmTokenTTL time.Duration
-	m               serviceMetrics
+	tx                 transactor.Transactor
+	repo               Repository
+	confirms           Confirmator
+	remoteRepoProvider RemoteRepositoryProvider
+	appBaseURL         string
+	confirmTokenTTL    time.Duration
+	m                  serviceMetrics
 }
 
 func New(cfg Config) *Service {
 	return &Service{
-		repo:            cfg.Repo,
-		github:          cfg.GitHub,
-		appBaseURL:      cfg.AppBaseURL,
-		confirmTokenTTL: cfg.ConfirmTokenTTL,
-		m:               newServiceMetrics(cfg.Registry),
+		tx:                 cfg.Tx,
+		repo:               cfg.Repo,
+		confirms:           cfg.Confirms,
+		remoteRepoProvider: cfg.GitHub,
+		appBaseURL:         cfg.AppBaseURL,
+		confirmTokenTTL:    cfg.ConfirmTokenTTL,
+		m:                  newServiceMetrics(cfg.Registry),
 	}
 }
 
 func (s *Service) Subscribe(ctx context.Context, p domain.SubscribeParams) error {
-	p.Repository = normalizeRepo(p.Repository)
-	if !repoNameRe.MatchString(p.Repository) {
-		return domain.ErrInvalidRepoFormat
-	}
-	parts := strings.SplitN(p.Repository, "/", 2)
-	owner, name := parts[0], parts[1]
+	ctx = zerolog.Ctx(ctx).With().
+		Str("email", p.Email).
+		Str("repo", p.Repository).
+		Logger().
+		WithContext(ctx)
 
-	exists, err := s.github.RepoExists(ctx, domain.RepoExistsParams{Owner: owner, Name: name})
+	ref, err := domain.ParseRepoRef(p.Repository)
 	if err != nil {
-		return fmt.Errorf("check repo existence: %w", err)
+		return fmt.Errorf("subscription.Service.Subscribe: domain.ParseRepoRef: %w", err)
+	}
+
+	if err = s.remoteRepositoryExists(ctx, ref); err != nil {
+		return fmt.Errorf("subscription.Service.Subscribe: remoteRepositoryExists: %w", err)
+	}
+
+	tokens, err := domain.NewConfirmTokens(time.Now(), s.confirmTokenTTL)
+	if err != nil {
+		return fmt.Errorf("subscription.Service.Subscribe: domain.NewConfirmTokens: %w", err)
+	}
+
+	if err = s.createSubscription(ctx, ref, tokens, p.Email); err != nil {
+		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to subscribe to repo")
+
+		return err
+	}
+
+	zerolog.Ctx(ctx).Info().Msg("subscription created")
+	s.m.subscriptionsCreated.Inc()
+
+	return nil
+}
+
+func (s *Service) createSubscription(ctx context.Context, ref domain.RepoRef, tokens domain.ConfirmTokens, email string) error {
+	return s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		repoID, err := s.repo.SaveRepo(ctx, ref)
+		if err != nil {
+			return fmt.Errorf("subscription.Service.createSubscription: Repository.SaveRepo: %w", err)
+		}
+
+		sub, err := s.repo.CreateSubscription(ctx, domain.CreateSubscriptionParams{
+			Email:                 email,
+			RepositoryID:          repoID,
+			ConfirmToken:          tokens.Confirm,
+			ConfirmTokenExpiresAt: tokens.ConfirmExpiresAt,
+			UnsubscribeToken:      tokens.Unsubscribe,
+		})
+		if err != nil {
+			return fmt.Errorf("subscription.Service.createSubscription: Repository.CreateSubscription: %w", err)
+		}
+
+		if err := s.confirms.CreateConfirmation(ctx, sub.ID); err != nil {
+			return fmt.Errorf("subscription.Service.createSubscription: Confirmator.CreateConfirmation: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func (s *Service) remoteRepositoryExists(ctx context.Context, repo domain.RepoExistsParams) error {
+	exists, err := s.remoteRepoProvider.RepoExists(ctx, repo)
+	if err != nil {
+		return fmt.Errorf("subscription.Service.Subscribe: GitHub.RepoExists: %w", err)
 	}
 	if !exists {
 		return domain.ErrRepoNotFound
 	}
 
-	repoID, err := s.repo.UpsertRepo(ctx, domain.UpsertRepoParams{Owner: owner, Name: name})
-	if err != nil {
-		return fmt.Errorf("upsert repo: %w", err)
-	}
-
-	confirmToken, err := domain.GenerateToken()
-	if err != nil {
-		return fmt.Errorf("generate confirm token: %w", err)
-	}
-	unsubscribeToken, err := domain.GenerateToken()
-	if err != nil {
-		return fmt.Errorf("generate unsubscribe token: %w", err)
-	}
-
-	_, err = s.repo.CreateSubscription(ctx, domain.CreateSubscriptionParams{
-		Email:                 p.Email,
-		RepositoryID:          repoID,
-		ConfirmToken:          confirmToken,
-		ConfirmTokenExpiresAt: time.Now().Add(s.confirmTokenTTL),
-		UnsubscribeToken:      unsubscribeToken,
-	})
-	if err != nil {
-		return fmt.Errorf("subscription.Service.Subscribe: Repository.CreateSubscription: %w", err)
-	}
-
-	zerolog.Ctx(ctx).Info().
-		Str("email", p.Email).
-		Str("repo", p.Repository).
-		Int64("repo_id", repoID).
-		Msg("subscription created")
-	s.m.subscriptionsCreated.Inc()
 	return nil
 }
 

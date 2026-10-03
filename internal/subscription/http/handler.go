@@ -36,11 +36,23 @@ func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 	if status == http.StatusInternalServerError {
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg("internal server error")
 	}
-	msg := err.Error()
+	msg := rootCause(err).Error()
 	if status == http.StatusInternalServerError {
 		msg = "internal server error"
 	}
 	writeJSON(w, status, ErrorResponse{Error: msg})
+}
+
+// rootCause strips the internal wrapping chain (ADR-0005) so clients see the
+// domain error message, not the call path that produced it.
+func rootCause(err error) error {
+	for {
+		inner := errors.Unwrap(err)
+		if inner == nil {
+			return err
+		}
+		err = inner
+	}
 }
 
 func errorStatus(err error) int {

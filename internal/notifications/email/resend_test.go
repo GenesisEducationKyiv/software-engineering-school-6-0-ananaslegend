@@ -98,6 +98,6 @@ func TestResend_SendConfirmation_PropagatesAPIError(t *testing.T) {
 		To: "u@example.com", ConfirmURL: "x", RepoFullName: "a/b",
 	})
 	require.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "send confirmation email"),
+	assert.True(t, strings.Contains(err.Error(), "email.ResendMailer.SendConfirmation"),
 		"expected wrapped error from SendConfirmation, got %q", err)
 }

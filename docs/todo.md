@@ -25,3 +25,6 @@ WHERE confirmed_at IS NULL
 Один сервіс піднімає обидва транспорти.
 
 ## Refactor code
+
+## Pending status to repo scan
+

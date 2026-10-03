@@ -47,7 +47,7 @@ func Run(ctx context.Context) {
 
 	rdb, err := NewRedisClient(cfg.RedisURL)
 	if err != nil {
-		bootstrap.Warn().Err(err).Msg("redis unavailable, github caching disabled")
+		bootstrap.Fatal().Err(err).Msg("redis unavailable, github caching disabled")
 	}
 
 	metricRegistry := newMetricsRegistry(pool)
@@ -86,7 +86,7 @@ func Run(ctx context.Context) {
 	var cronsWG sync.WaitGroup
 	runWorkers(ctx, &cronsWG, cfg, txr, pool, notificationsClient, releaseProvider, metricRegistry, r)
 
-	srv := newHTTPServer(cfg, pool, log, metricRegistry)
+	srv := newHTTPServer(cfg, pool, txr, log, metricRegistry)
 
 	go func() {
 		log.Info().Str("addr", cfg.HTTPAddr).Msg("server listening")

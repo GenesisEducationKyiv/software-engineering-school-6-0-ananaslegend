@@ -45,8 +45,7 @@ linters:
         - .WithMessage(
         - .WithMessagef(
         - .WithStack(
-      ignore-interface-regexps:
-        - ^transactor\.Transactor$
+        - (github.com/ananaslegend/reposeetory/pkg/transactor.Transactor).WithinTransaction(
   exclusions:
     generated: lax
     rules:

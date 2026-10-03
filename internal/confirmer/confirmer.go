@@ -106,7 +106,7 @@ func (c *Confirmer) Flush(ctx context.Context) {
 			p := items[0]
 			sendErr := c.mailer.SendConfirmation(ctx, contract.SendConfirmationRequest{
 				To:           p.Email,
-				ConfirmURL:   c.baseURL + "/api/confirm/" + p.ConfirmToken,
+				ConfirmURL:   ConfirmURL(c.baseURL, p.ConfirmToken),
 				RepoFullName: p.RepoOwner + "/" + p.RepoName,
 			})
 			switch {
