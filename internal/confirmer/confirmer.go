@@ -14,6 +14,7 @@ import (
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 )
 
 // PendingConfirmation is one outbox row joined with subscription + repository data.
@@ -44,6 +45,7 @@ type Config struct {
 	Interval time.Duration
 	BaseURL  string
 	Registry *prometheus.Registry
+	RED      *redmetrics.RED // flush: result=ok|empty|error
 }
 
 // Confirmer periodically drains the confirmation_notifications outbox by sending emails.
@@ -54,6 +56,7 @@ type Confirmer struct {
 	interval time.Duration
 	baseURL  string
 	m        confirmerMetrics
+	red      *redmetrics.RED
 }
 
 const confirmLimit = 1
@@ -67,6 +70,7 @@ func New(cfg Config) *Confirmer {
 		interval: cfg.Interval,
 		baseURL:  cfg.BaseURL,
 		m:        newConfirmerMetrics(cfg.Registry),
+		red:      cfg.RED,
 	}
 }
 
@@ -86,6 +90,9 @@ func (c *Confirmer) Run(ctx context.Context) {
 
 // Flush drains all currently pending confirmations. Exported for testing.
 func (c *Confirmer) Flush(ctx context.Context) {
+	ctx, stop := redmetrics.Start(ctx, c.red)
+	defer stop()
+
 	for {
 		var processed bool
 		err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
@@ -121,11 +128,15 @@ func (c *Confirmer) Flush(ctx context.Context) {
 			return nil
 		})
 		if err != nil {
+			redmetrics.SetError(ctx)
 			zerolog.Ctx(ctx).Error().Err(err).Msg("confirmer: process next failed")
 			return
 		}
 		if !processed {
-			return
+			return // queue empty — nothing more to send
 		}
+		// Sent one: this flush did useful work. An empty flush never reaches
+		// here, so it records no RED sample (skip-by-default).
+		redmetrics.SetSuccess(ctx)
 	}
 }

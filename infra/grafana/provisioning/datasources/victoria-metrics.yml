@@ -1,0 +1,11 @@
+apiVersion: 1
+datasources:
+  - name: VictoriaMetrics
+    uid: victoriametrics
+    type: prometheus
+    access: proxy
+    url: http://vmsingle:8428
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST

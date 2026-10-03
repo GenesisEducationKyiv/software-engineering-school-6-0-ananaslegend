@@ -14,6 +14,7 @@ import (
 	"github.com/ananaslegend/reposeetory/pkg/transactor"
 
 	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 )
 
 // PendingNotification is one outbox row joined with subscription + repository data.
@@ -45,6 +46,7 @@ type Config struct {
 	Interval time.Duration
 	BaseURL  string
 	Registry *prometheus.Registry
+	RED      *redmetrics.RED // flush: result=ok|empty|error
 }
 
 // Notifier periodically drains the release_notifications outbox by sending emails.
@@ -55,6 +57,7 @@ type Notifier struct {
 	interval time.Duration
 	baseURL  string
 	m        notifierMetrics
+	red      *redmetrics.RED
 }
 
 const notifyLimit = 1
@@ -68,6 +71,7 @@ func New(cfg Config) *Notifier {
 		interval: cfg.Interval,
 		baseURL:  cfg.BaseURL,
 		m:        newNotifierMetrics(cfg.Registry),
+		red:      cfg.RED,
 	}
 }
 
@@ -88,6 +92,8 @@ func (n *Notifier) Run(ctx context.Context) {
 // Flush drains all currently pending notifications. Exported for testing.
 func (n *Notifier) Flush(ctx context.Context) {
 	start := time.Now()
+	ctx, stop := redmetrics.Start(ctx, n.red)
+	defer stop()
 	defer func() { n.m.flushDuration.Observe(time.Since(start).Seconds()) }()
 
 	for {
@@ -128,11 +134,15 @@ func (n *Notifier) Flush(ctx context.Context) {
 			return nil
 		})
 		if err != nil {
+			redmetrics.SetError(ctx)
 			zerolog.Ctx(ctx).Error().Err(err).Msg("notifier: process next failed")
 			return
 		}
 		if !processed {
-			return
+			return // queue empty — nothing more to send
 		}
+		// Sent one: this flush did useful work. An empty flush never reaches
+		// here, so it records no RED sample (skip-by-default).
+		redmetrics.SetSuccess(ctx)
 	}
 }

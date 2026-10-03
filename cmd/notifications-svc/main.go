@@ -22,6 +22,8 @@ import (
 	"github.com/ananaslegend/reposeetory/internal/httpapi"
 	"github.com/ananaslegend/reposeetory/internal/notifications/email"
 	"github.com/ananaslegend/reposeetory/internal/notifications/transport"
+	"github.com/ananaslegend/reposeetory/internal/observability/emailermetrics"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 )
 
 type svcConfig struct {
@@ -53,13 +55,14 @@ func main() {
 
 	log := newLogger(cfg)
 
-	em, err := newSender(cfg, log)
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+
+	red := redmetrics.New(redmetrics.Config{Subsystem: "email", ExtraLabels: []string{"driver"}, Registry: reg})
+	em, err := newSender(cfg, log, red)
 	if err != nil {
 		log.Fatal().Err(err).Msg("create sender")
 	}
-
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	h := transport.NewHandler(transport.Config{Sender: em, Registry: reg})
 
@@ -117,11 +120,11 @@ func newLogger(cfg svcConfig) zerolog.Logger {
 	return l.Level(lvl)
 }
 
-func newSender(cfg svcConfig, log zerolog.Logger) (email.Sender, error) {
+func newSender(cfg svcConfig, log zerolog.Logger, red *redmetrics.RED) (email.Sender, error) {
 	switch {
 	case cfg.ResendAPIKey != "":
 		log.Info().Msg("sender: resend")
-		return email.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFrom), nil
+		return emailermetrics.Wrap(email.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFrom), "resend", red), nil
 	case cfg.SMTPHost != "":
 		m, err := email.NewSMTPMailer(email.SMTPMailerConfig{
 			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser,
@@ -131,9 +134,9 @@ func newSender(cfg svcConfig, log zerolog.Logger) (email.Sender, error) {
 			return nil, fmt.Errorf("main.newSender: email.NewSMTPMailer: %w", err)
 		}
 		log.Info().Msg("sender: smtp")
-		return m, nil
+		return emailermetrics.Wrap(m, "smtp", red), nil
 	default:
 		log.Info().Msg("sender: stub")
-		return email.NewStubMailer(), nil
+		return emailermetrics.Wrap(email.NewStubMailer(), "stub", red), nil
 	}
 }

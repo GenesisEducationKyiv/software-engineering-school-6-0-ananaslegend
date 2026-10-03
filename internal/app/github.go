@@ -9,10 +9,11 @@ import (
 
 	"github.com/ananaslegend/reposeetory/internal/config"
 	githubclient "github.com/ananaslegend/reposeetory/internal/github"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
 	"github.com/ananaslegend/reposeetory/internal/scanner"
 )
 
-func newReleaseProvider(cfg config.Config, log zerolog.Logger, reg *prometheus.Registry, rdb *redis.Client) scanner.ReleaseProvider {
+func newReleaseProvider(cfg config.Config, log zerolog.Logger, reg *prometheus.Registry, rdb *redis.Client, red *redmetrics.RED) scanner.ReleaseProvider {
 	githubClient := githubclient.NewClient(cfg.GitHubToken)
 
 	provider := githubclient.NewCachingClient(githubclient.CachingConfig{
@@ -20,6 +21,7 @@ func newReleaseProvider(cfg config.Config, log zerolog.Logger, reg *prometheus.R
 		RDB:      rdb,
 		TTL:      10 * time.Minute,
 		Registry: reg,
+		RED:      red,
 	})
 	log.Info().Msg("github release cache: redis")
 

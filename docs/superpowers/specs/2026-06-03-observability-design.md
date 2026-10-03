@@ -367,7 +367,7 @@ func (m *RED) Observe(result string, dur time.Duration, extraLabels ...string)
 - `confirmer_ticks_total{result}` — `ok|error|empty`
 - `confirmer_tick_duration_seconds`
 
-`empty` — для notifier/confirmer означає "outbox порожній", для scanner — "немає репо для скану".
+`empty` для scanner — "немає репо для скану"; для notifier/confirmer — "outbox порожній".
 
 Існуючий `notifier_flush_duration_seconds` стає легасі (тимчасово паралельний; видалення — окремий PR).
 
@@ -392,10 +392,33 @@ func newRED(reg *prometheus.Registry) reds {
 
 ### 4.4 Метрики, що залишаються поза RED
 
-- `github_cache_hits_total`, `github_cache_misses_total`
-- `release_notifications_*`, `confirmation_notifications_*` outbox depth
-- `db_pool_*` (через `NewPoolCollector`)
-- Go runtime / process collectors
+- `github_cache_hits_total`, `github_cache_misses_total` (існують)
+- `db_pool_*` через `NewPoolCollector` (існують)
+- Go runtime / process collectors (існують)
+
+### 4.5 Нові gauge-метрики outbox depth
+
+Outbox depth (скільки рядків чекає у `release_notifications` / `confirmation_notifications` з `sent_at IS NULL`) — критичний сигнал "встигаємо обробляти?", але **наразі не інструментовано**. Додаємо як частину Phase 1.
+
+Реалізація — `prometheus.Collector` interface у новому пакеті `internal/observability/outboxcollector` (аналогічно до існуючого `NewPoolCollector` у `internal/app/postgres.go`):
+
+```go
+type Collector struct {
+    pool *pgxpool.Pool
+    releaseDepth      *prometheus.Desc
+    confirmationDepth *prometheus.Desc
+}
+
+func New(pool *pgxpool.Pool) *Collector
+
+// Collect виконує два SELECT COUNT(*) запити (timeout 1s) і експонує:
+//   - release_notifications_pending      (gauge)
+//   - confirmation_notifications_pending (gauge)
+```
+
+Scrape-time запит `SELECT COUNT(*) FROM <table> WHERE sent_at IS NULL` на двох таблицях. Counts невеликі (outbox дрейнується кожні 30s), `count(*)` на partial-NULL-індексованій таблиці швидкий. Якщо запит впав за timeout — Collect повертає лише gauge'и, що встигли; помилку рахуємо в `outbox_collector_errors_total` (опційно).
+
+Реєструється у тому ж Registry поряд із `NewPoolCollector` у `newMetricsRegistry`.
 
 ---
 
@@ -526,8 +549,8 @@ Auth: `GF_AUTH_ANONYMOUS_ENABLED=true` (viewer) локально; у проді 
 | 3.3 | Scanner tick p95 | `histogram_quantile(0.95, sum by(le) (rate(scanner_tick_duration_seconds_bucket[5m])))` |
 | 3.4 | Notifier tick p95 | те ж для `notifier_*` |
 | 3.5 | Confirmer tick p95 | те ж для `confirmer_*` |
-| 3.6 | Outbox depth (release_notifications) | існуюча gauge |
-| 3.7 | Outbox depth (confirmation_notifications) | існуюча gauge |
+| 3.6 | Outbox depth (release_notifications) | `release_notifications_pending` (нова gauge, див. 4.5) |
+| 3.7 | Outbox depth (confirmation_notifications) | `confirmation_notifications_pending` (нова gauge, див. 4.5) |
 
 #### Row 4 — Runtime / DB pool / Self-metrics
 
@@ -626,6 +649,7 @@ make obs-init  # scripts/obs-init.sh — створює ILM policy, index templa
   - Vector down → 3 retry → counter `failed` росте, app не блокується.
   - Close з deadline → флашить буфер.
 - `internal/observability/emailermetrics/wrapper_test.go` — декоратор обчислює `result` правильно для nil/error.
+- `internal/observability/outboxcollector/collector_test.go` — testcontainers Postgres; вставити N pending рядків → `Gather` повертає очікувані gauge-значення.
 - Existing metrics tests (`scanner/notifier/confirmer`) — додати assertions на нові `_ticks_total` / `_tick_duration_seconds`.
 
 **Integration** (build tag `integration`):
@@ -654,7 +678,7 @@ make obs-init  # scripts/obs-init.sh — створює ILM policy, index templa
 
 Для подальшого `writing-plans`:
 
-1. **Phase 1 — `redmetrics` helper + RED instrumentation** (тільки app code, нуль інфри). `/metrics` експонує нові серії. Backward-compatible.
+1. **Phase 1 — `redmetrics` helper, RED instrumentation, outbox depth collector** (тільки app code, нуль інфри). `/metrics` експонує нові серії. Backward-compatible.
 2. **Phase 2 — `logshipper` helper** (з no-op коли `VECTOR_INGEST_URL` порожній). stdout не змінюється. Backward-compatible.
 3. **Phase 3 — observability docker-compose overlay** (Vector + ES + Kibana + vmagent + vmsingle + Grafana). Локальний smoke test end-to-end.
 4. **Phase 4 — ILM policy, index template, initial alias, dashboard JSON** (provisioning + `obs-init.sh`).
@@ -674,6 +698,7 @@ make obs-init  # scripts/obs-init.sh — створює ILM policy, index templa
 | Logshipper-метрики → циклічна залежність при ініціалізації | Logger створюємо ПІСЛЯ Registry (existing порядок у `app.Run`); logshipper-логи пишуться ЛИШЕ в stderr, не через сам себе. |
 | Дублювання старих `notifier_emails_sent_total` із новими `email_requests_total{driver}` | У Phase 1 не видаляємо; після стабілізації — окремий cleanup-PR. |
 | `LOG_PRETTY=true` ламає JSON у HTTP-каналі | `zerolog.MultiLevelWriter` дублює до форматтерів — HTTP отримує JSON завжди; задокументовано в Section 3.1. |
+| Outbox-collector запити `count(*)` сповільнюють scrape під час нагрузки | Timeout 1s на запит; outbox дрейнується кожні 30s, тому розмір малий; партіальний індекс `WHERE sent_at IS NULL` робить count швидким. |
 
 ---
 
