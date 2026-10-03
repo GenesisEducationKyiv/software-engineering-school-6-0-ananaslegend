@@ -1,0 +1,210 @@
+package confirmer_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/mock/gomock"
+
+	txmocks "github.com/ananaslegend/reposeetory/pkg/transactor/mocks"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/ananaslegend/reposeetory/internal/confirmer"
+	"github.com/ananaslegend/reposeetory/internal/confirmer/mocks"
+	"github.com/ananaslegend/reposeetory/internal/notifications/contract"
+	"github.com/ananaslegend/reposeetory/internal/observability/redmetrics"
+)
+
+func newConfirmer(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockNotificationsSender) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	tx := txmocks.NewMockTransactor(ctrl)
+	repo := mocks.NewMockRepository(ctrl)
+	m := mocks.NewMockNotificationsSender(ctrl)
+	c := confirmer.New(confirmer.Config{
+		Tx:      tx,
+		Repo:    repo,
+		Mailer:  m,
+		BaseURL: "http://localhost:8080",
+		RED:     redmetrics.New(redmetrics.Config{Subsystem: "confirmer"}),
+	})
+	return c, tx, repo, m
+}
+
+// invokeWithinTransaction makes the mock call fn with the given context.
+func invokeWithinTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+var testPending = confirmer.PendingConfirmation{
+	ID:           1,
+	Email:        "user@example.com",
+	ConfirmToken: "tok-abc123",
+	RepoOwner:    "golang",
+	RepoName:     "go",
+}
+
+func TestConfirmer_FlushEmpty_NoMailer(t *testing.T) {
+	c, tx, repo, _ := newConfirmer(t)
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil)
+
+	c.Flush(context.Background())
+}
+
+func TestConfirmer_FlushOne_MailerCalled(t *testing.T) {
+	c, tx, repo, m := newConfirmer(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), contract.SendConfirmationRequest{
+		To:           "user@example.com",
+		ConfirmURL:   "http://localhost:8080/api/confirm/tok-abc123",
+		RepoFullName: "golang/go",
+	}).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), int64(1)).Return(nil)
+
+	c.Flush(context.Background())
+}
+
+func TestConfirmer_FlushMailerError_NoMarkSentAndStops(t *testing.T) {
+	c, tx, repo, m := newConfirmer(t)
+
+	smtpErr := errors.New("smtp timeout")
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(smtpErr)
+	// MarkSent must NOT be called on mailer error
+
+	c.Flush(context.Background())
+}
+
+func TestConfirmer_FlushPermanentError_DropsAndMarksSent(t *testing.T) {
+	c, tx, repo, m := newConfirmer(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).
+		Return(fmt.Errorf("bad request: %w", contract.ErrPermanent))
+	repo.EXPECT().MarkSent(gomock.Any(), int64(1)).Return(nil)
+
+	c.Flush(context.Background())
+}
+
+func TestConfirmer_FlushMultiple_ProcessedInOrder(t *testing.T) {
+	c, tx, repo, m := newConfirmer(t)
+
+	second := confirmer.PendingConfirmation{ID: 2, Email: "b@example.com", ConfirmToken: "tok-xyz", RepoOwner: "foo", RepoName: "bar"}
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{second}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	c.Flush(context.Background())
+}
+
+func newConfirmerWithRegistry(t *testing.T) (*confirmer.Confirmer, *txmocks.MockTransactor, *mocks.MockRepository, *mocks.MockNotificationsSender, *prometheus.Registry) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	tx := txmocks.NewMockTransactor(ctrl)
+	repo := mocks.NewMockRepository(ctrl)
+	m := mocks.NewMockNotificationsSender(ctrl)
+	reg := prometheus.NewRegistry()
+	c := confirmer.New(confirmer.Config{
+		Tx:       tx,
+		Repo:     repo,
+		Mailer:   m,
+		BaseURL:  "http://localhost:8080",
+		Registry: reg,
+		RED:      redmetrics.New(redmetrics.Config{Subsystem: "confirmer", Registry: reg}),
+	})
+	return c, tx, repo, m, reg
+}
+
+func TestConfirmer_Flush_IncrementsEmailSentMetric(t *testing.T) {
+	c, tx, repo, m, reg := newConfirmerWithRegistry(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil)
+
+	c.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP confirmer_emails_sent_total Total number of confirmation emails attempted.
+		# TYPE confirmer_emails_sent_total counter
+		confirmer_emails_sent_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_emails_sent_total"))
+}
+
+func TestConfirmer_FlushRecordsRED(t *testing.T) {
+	c, tx, repo, m, reg := newConfirmerWithRegistry(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().MarkSent(gomock.Any(), gomock.Any()).Return(nil)
+
+	c.Flush(context.Background())
+
+	expected := strings.NewReader(`
+		# HELP confirmer_requests_total Total number of confirmer operations.
+		# TYPE confirmer_requests_total counter
+		confirmer_requests_total{result="ok"} 1
+	`)
+	require.NoError(t, testutil.GatherAndCompare(reg, expected, "confirmer_requests_total"))
+}
+
+func TestConfirmer_EmptyFlushEmitsNoREDSample(t *testing.T) {
+	c, tx, repo, _, reg := newConfirmerWithRegistry(t)
+
+	tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction)
+	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil)
+
+	c.Flush(context.Background())
+
+	// Empty flush must emit no RED sample at all — the metric family is absent.
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(""), "confirmer_requests_total"))
+}

@@ -1,0 +1,17 @@
+FROM golang:1.26-alpine AS builder
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY cmd/ cmd/
+COPY internal/ internal/
+COPY pkg/ pkg/
+
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /notifications-svc ./cmd/notifications-svc
+
+FROM alpine:3.21 AS runtime
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /notifications-svc /notifications-svc
+EXPOSE 8081
+ENTRYPOINT ["/notifications-svc"]

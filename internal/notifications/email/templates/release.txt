@@ -1,0 +1,6 @@
+New release {{.ReleaseTag}} for {{.RepoFullName}}
+
+Version {{.ReleaseTag}} has just been published.
+
+View the release:
+{{.ReleaseURL}}
