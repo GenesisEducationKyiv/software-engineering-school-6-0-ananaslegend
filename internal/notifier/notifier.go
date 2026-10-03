@@ -4,6 +4,7 @@ package notifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -108,11 +109,18 @@ func (n *Notifier) Flush(ctx context.Context) {
 					p.RepoOwner, p.RepoName, p.ReleaseTag),
 				UnsubscribeURL: fmt.Sprintf("%s/api/unsubscribe/%s", n.baseURL, p.UnsubscribeToken),
 			})
-			if sendErr != nil {
+			switch {
+			case errors.Is(sendErr, contract.ErrPermanent):
+				// A permanent failure will never succeed on retry, so the row is
+				// marked sent to stop it from blocking the outbox.
+				n.m.emailsSent.WithLabelValues("error").Inc()
+				zerolog.Ctx(ctx).Warn().Err(sendErr).Int64("id", p.ID).Msg("notifier: dropping notification after permanent failure")
+			case sendErr != nil:
 				n.m.emailsSent.WithLabelValues("error").Inc()
 				return fmt.Errorf("notifier.Notifier.Flush: NotificationsSender.SendRelease: %w", sendErr)
+			default:
+				n.m.emailsSent.WithLabelValues("ok").Inc()
 			}
-			n.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = n.repo.MarkSent(ctx, p.ID); err != nil {
 				return fmt.Errorf("notifier.Notifier.Flush: Repository.MarkSent: %w", err)
 			}

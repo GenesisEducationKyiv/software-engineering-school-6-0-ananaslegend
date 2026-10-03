@@ -3,6 +3,7 @@ package confirmer_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -80,6 +81,24 @@ func TestConfirmer_FlushMailerError_NoMarkSentAndStops(t *testing.T) {
 	repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil)
 	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).Return(smtpErr)
 	// MarkSent must NOT be called on mailer error
+
+	c.Flush(context.Background())
+}
+
+func TestConfirmer_FlushPermanentError_DropsAndMarksSent(t *testing.T) {
+	c, tx, repo, m := newConfirmer(t)
+
+	gomock.InOrder(
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+		tx.EXPECT().WithinTransaction(gomock.Any(), gomock.Any()).DoAndReturn(invokeWithinTransaction),
+	)
+	gomock.InOrder(
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return([]confirmer.PendingConfirmation{testPending}, nil),
+		repo.EXPECT().GetConfirmationsWithLock(gomock.Any(), 1).Return(nil, nil),
+	)
+	m.EXPECT().SendConfirmation(gomock.Any(), gomock.Any()).
+		Return(fmt.Errorf("bad request: %w", contract.ErrPermanent))
+	repo.EXPECT().MarkSent(gomock.Any(), int64(1)).Return(nil)
 
 	c.Flush(context.Background())
 }

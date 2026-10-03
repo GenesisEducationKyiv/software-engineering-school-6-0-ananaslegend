@@ -4,6 +4,7 @@ package confirmer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -101,11 +102,18 @@ func (c *Confirmer) Flush(ctx context.Context) {
 				ConfirmURL:   c.baseURL + "/api/confirm/" + p.ConfirmToken,
 				RepoFullName: p.RepoOwner + "/" + p.RepoName,
 			})
-			if sendErr != nil {
+			switch {
+			case errors.Is(sendErr, contract.ErrPermanent):
+				// A permanent failure will never succeed on retry, so the row is
+				// marked sent to stop it from blocking the outbox.
+				c.m.emailsSent.WithLabelValues("error").Inc()
+				zerolog.Ctx(ctx).Warn().Err(sendErr).Int64("id", p.ID).Msg("confirmer: dropping confirmation after permanent failure")
+			case sendErr != nil:
 				c.m.emailsSent.WithLabelValues("error").Inc()
 				return fmt.Errorf("confirmer.Confirmer.Flush: NotificationsSender.SendConfirmation: %w", sendErr)
+			default:
+				c.m.emailsSent.WithLabelValues("ok").Inc()
 			}
-			c.m.emailsSent.WithLabelValues("ok").Inc()
 			if err = c.repo.MarkSent(ctx, p.ID); err != nil {
 				return fmt.Errorf("confirmer.Confirmer.Flush: Repository.MarkSent: %w", err)
 			}
